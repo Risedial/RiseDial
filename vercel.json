@@ -1,6 +1,6 @@
 {
   "framework": "nextjs",
-  "buildCommand": "npm run build:safe",
+  "buildCommand": "npm run build:production",
   "outputDirectory": ".next",
   "installCommand": "npm ci",
   "regions": ["iad1", "cle1"],
