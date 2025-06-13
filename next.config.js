@@ -1,12 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ['@supabase/supabase-js']
-  },
+  // Move serverComponentsExternalPackages to top-level for Next.js 15
+  serverExternalPackages: ['@supabase/supabase-js'],
   
   // Environment variables configuration
   env: {
     CUSTOM_KEY: process.env.CUSTOM_KEY,
+    NEXT_TELEMETRY_DISABLED: '1'
   },
   
   // Build configuration
@@ -63,14 +63,6 @@ const nextConfig = {
     return config
   },
   
-  // Output configuration for static export if needed
-  // output: 'export',
-  // trailingSlash: true,
-  // images: { unoptimized: true },
-  
-  // Disable telemetry for faster builds
-  telemetry: false,
-  
   // Compress output
   compress: true,
   
@@ -79,9 +71,6 @@ const nextConfig = {
   
   // React strict mode
   reactStrictMode: true,
-  
-  // SWC configuration
-  swcMinify: true,
   
   // Image domains if needed
   images: {
@@ -92,6 +81,18 @@ const nextConfig = {
         hostname: '**.supabase.co',
       }
     ]
+  },
+  
+  // TypeScript configuration
+  typescript: {
+    // Don't fail build on TypeScript errors in development
+    ignoreBuildErrors: process.env.NODE_ENV === 'development'
+  },
+  
+  // ESLint configuration
+  eslint: {
+    // Don't fail build on ESLint errors in development
+    ignoreDuringBuilds: process.env.NODE_ENV === 'development'
   }
 }
 

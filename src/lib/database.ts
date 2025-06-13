@@ -337,7 +337,7 @@ export class DatabaseUtils {
 
     if (error) throw error;
     
-    const totalCost = (data || []).reduce((sum, row) => sum + (row.cost_usd || 0), 0);
+    const totalCost = (data || []).reduce((sum: number, row: { cost_usd?: number }) => sum + (row.cost_usd || 0), 0);
     return totalCost;
   }
 

@@ -207,7 +207,7 @@ export class CostAnalytics {
     // Group by date and aggregate
     const dailyData = new Map<string, { totalCost: number; userIds: Set<string> }>();
 
-    data.forEach(record => {
+    data.forEach((record: { created_at: string; cost_usd: number; user_id: string }) => {
       const date = record.created_at.split('T')[0];
       if (!dailyData.has(date)) {
         dailyData.set(date, { totalCost: 0, userIds: new Set() });
@@ -409,10 +409,10 @@ export class CostAnalytics {
 
     // Group by user and calculate individual costs
     const userCosts = new Map<string, { cost: number; tier: string }>();
-    data.forEach(record => {
+    data.forEach((record: { user_id: string; cost_usd: number; users?: { subscription_tier?: string } }) => {
       const userId = record.user_id;
       const cost = record.cost_usd * 1.35; // Convert to CAD
-      const tier = (record as any).users?.subscription_tier || 'basic';
+      const tier = record.users?.subscription_tier || 'basic';
 
       if (!userCosts.has(userId)) {
         userCosts.set(userId, { cost: 0, tier });
@@ -450,7 +450,7 @@ export class CostAnalytics {
 
     const modelMetrics = new Map<string, { totalCost: number; totalTokens: number; requests: number }>();
 
-    data.forEach(record => {
+    data.forEach((record: { model_used?: string; cost_usd: number; tokens_total: number }) => {
       const model = record.model_used || 'unknown';
       if (!modelMetrics.has(model)) {
         modelMetrics.set(model, { totalCost: 0, totalTokens: 0, requests: 0 });

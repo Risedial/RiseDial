@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabaseUtils } from '@/lib/database';
-import { canCreateSupabaseClient } from '@/lib/supabase-client';
+import { canCreateSupabaseClient, getSafeSupabaseClient } from '@/lib/supabase-client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,19 +16,35 @@ export async function GET(request: NextRequest) {
     const db = getDatabaseUtils();
     
     const { searchParams } = new URL(request.url);
-    const assistantId = searchParams.get('id');
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const offset = parseInt(searchParams.get('offset') || '0');
+    const severity = searchParams.get('severity');
+    const resolved = searchParams.get('resolved');
 
-    if (assistantId) {
-      const assistant = await db.getCrisisAssistant(assistantId);
-      return NextResponse.json(assistant);
-    } else {
-      const assistants = await db.listCrisisAssistants();
-      return NextResponse.json(assistants);
-    }
+    // Get crisis events
+    const events = await db.getCrisisEvents(
+      undefined, // userId - not filtering by user in admin panel
+      resolved ? resolved === 'true' : undefined,
+      limit
+    );
+
+    // Generate summary
+    const summary = generateCrisisSummary(events);
+
+    return NextResponse.json({
+      events,
+      summary,
+      pagination: {
+        limit,
+        offset,
+        total: events.length
+      }
+    });
+
   } catch (error) {
     console.error('Crisis API GET error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch crisis assistants' },
+      { error: 'Failed to fetch crisis events' },
       { status: 500 }
     );
   }
@@ -176,7 +192,12 @@ function generateCrisisSummary(events: any[]) {
 }
 
 async function resolveCrisisEvent(eventId: string, notes: string) {
-  const { data, error } = await db.supabase
+  const supabase = getSafeSupabaseClient();
+  if (!supabase) {
+    throw new Error('Database not available');
+  }
+
+  const { data, error } = await supabase
     .from('crisis_events')
     .update({
       resolved: true,
@@ -197,7 +218,12 @@ async function resolveCrisisEvent(eventId: string, notes: string) {
 }
 
 async function escalateCrisisEvent(eventId: string, escalateTo: string) {
-  const { data, error } = await db.supabase
+  const supabase = getSafeSupabaseClient();
+  if (!supabase) {
+    throw new Error('Database not available');
+  }
+
+  const { data, error } = await supabase
     .from('crisis_events')
     .update({
       escalated_to: escalateTo,
@@ -217,7 +243,12 @@ async function escalateCrisisEvent(eventId: string, escalateTo: string) {
 }
 
 async function updateCrisisNotes(eventId: string, notes: string) {
-  const { data, error } = await db.supabase
+  const supabase = getSafeSupabaseClient();
+  if (!supabase) {
+    throw new Error('Database not available');
+  }
+
+  const { data, error } = await supabase
     .from('crisis_events')
     .update({
       resolution_notes: notes

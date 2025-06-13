@@ -1,4 +1,4 @@
-import { getEnvironmentConfig, safeGetEnv } from './env';
+import { getEnvironmentConfig, safeGetEnv, isDevelopment, isProduction } from './env';
 
 // Get safe environment configuration
 const envConfig = getEnvironmentConfig();
@@ -80,13 +80,13 @@ export function validateEnvironment(): void {
 
 export const config: Config = {
   supabase: {
-    url: envConfig.supabaseUrl,
-    serviceRoleKey: envConfig.supabaseServiceKey || undefined,
-    anonKey: envConfig.supabaseAnonKey,
+    url: envConfig.SUPABASE_URL,
+    serviceRoleKey: envConfig.SUPABASE_SERVICE_ROLE_KEY || undefined,
+    anonKey: envConfig.SUPABASE_ANON_KEY,
   },
   telegram: {
     botToken: process.env.TELEGRAM_BOT_TOKEN!,
-    webhookSecret: process.env.WEBHOOK_SECRET_TOKEN!
+    webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET_TOKEN || ''
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY!,
@@ -126,16 +126,16 @@ export const config: Config = {
     }
   },
   environment: {
-    nodeEnv: envConfig.nodeEnv,
-    isDevelopment: envConfig.isDevelopment,
-    isProduction: envConfig.isProduction,
+    nodeEnv: envConfig.NODE_ENV,
+    isDevelopment: isDevelopment(),
+    isProduction: isProduction(),
   },
   database: {
     timeout: 30000, // 30 seconds
     retryAttempts: 3,
   },
   api: {
-    baseUrl: safeGetEnv('NEXT_PUBLIC_API_BASE_URL') || (envConfig.isProduction ? 'https://your-domain.vercel.app' : 'http://localhost:3000'),
+    baseUrl: safeGetEnv('NEXT_PUBLIC_API_BASE_URL') || (isProduction() ? 'https://your-domain.vercel.app' : 'http://localhost:3000'),
     timeout: 10000, // 10 seconds
   },
   app: {

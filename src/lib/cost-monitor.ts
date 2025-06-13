@@ -208,7 +208,7 @@ export class CostMonitor {
 
     if (error) throw error;
 
-    const total_cost = (data?.reduce((sum, record) => sum + record.cost_usd, 0) || 0) * 1.35; // Convert to CAD
+    const total_cost = (data?.reduce((sum: number, record: { cost_usd: number }) => sum + record.cost_usd, 0) || 0) * 1.35; // Convert to CAD
     const messages_count = data?.length || 0;
 
     return { total_cost, messages_count };
@@ -227,8 +227,8 @@ export class CostMonitor {
 
     if (error) throw error;
 
-    const total_cost = (data?.reduce((sum, record) => sum + record.cost_usd, 0) || 0) * 1.35; // Convert to CAD
-    const total_tokens = data?.reduce((sum, record) => sum + record.tokens_total, 0) || 0;
+    const total_cost = (data?.reduce((sum: number, record: { cost_usd: number }) => sum + record.cost_usd, 0) || 0) * 1.35; // Convert to CAD
+    const total_tokens = data?.reduce((sum: number, record: { tokens_total: number }) => sum + record.tokens_total, 0) || 0;
     const total_messages = data?.length || 0;
 
     return { total_cost, total_tokens, total_messages };
