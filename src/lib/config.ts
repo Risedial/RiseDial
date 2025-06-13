@@ -1,7 +1,12 @@
+import { getEnvironmentConfig, safeGetEnv } from './env';
+
+// Get safe environment configuration
+const envConfig = getEnvironmentConfig();
+
 export interface Config {
   supabase: {
     url: string;
-    serviceRoleKey: string;
+    serviceRoleKey?: string;
     anonKey: string;
   };
   telegram: {
@@ -29,6 +34,23 @@ export interface Config {
     basic: SubscriptionConfig;
     premium: SubscriptionConfig;
     unlimited: SubscriptionConfig;
+  };
+  environment: {
+    nodeEnv: string;
+    isDevelopment: boolean;
+    isProduction: boolean;
+  };
+  database: {
+    timeout: number;
+    retryAttempts: number;
+  };
+  api: {
+    baseUrl: string;
+    timeout: number;
+  };
+  app: {
+    name: string;
+    version: string;
   };
 }
 
@@ -58,9 +80,9 @@ export function validateEnvironment(): void {
 
 export const config: Config = {
   supabase: {
-    url: process.env.SUPABASE_URL!,
-    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    anonKey: process.env.SUPABASE_ANON_KEY!
+    url: envConfig.supabaseUrl,
+    serviceRoleKey: envConfig.supabaseServiceKey || undefined,
+    anonKey: envConfig.supabaseAnonKey,
   },
   telegram: {
     botToken: process.env.TELEGRAM_BOT_TOKEN!,
@@ -102,5 +124,41 @@ export const config: Config = {
       features: ['all'],
       upgradeThreshold: 999
     }
+  },
+  environment: {
+    nodeEnv: envConfig.nodeEnv,
+    isDevelopment: envConfig.isDevelopment,
+    isProduction: envConfig.isProduction,
+  },
+  database: {
+    timeout: 30000, // 30 seconds
+    retryAttempts: 3,
+  },
+  api: {
+    baseUrl: safeGetEnv('NEXT_PUBLIC_API_BASE_URL') || (envConfig.isProduction ? 'https://your-domain.vercel.app' : 'http://localhost:3000'),
+    timeout: 10000, // 10 seconds
+  },
+  app: {
+    name: 'AI Assistant Crisis Management',
+    version: '1.0.0',
   }
-}; 
+};
+
+// Export individual configurations for convenience
+export const supabaseConfig = config.supabase;
+export const environmentConfig = config.environment;
+export const databaseConfig = config.database;
+export const apiConfig = config.api;
+
+// Helper function to check if configuration is valid
+export function isConfigValid(): boolean {
+  return !!(config.supabase.url && config.supabase.anonKey);
+}
+
+// Helper function to get configuration with validation
+export function getValidatedConfig() {
+  if (!isConfigValid()) {
+    throw new Error('Configuration is not valid. Please check your environment variables.');
+  }
+  return config;
+} 

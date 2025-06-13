@@ -1,4 +1,4 @@
-import { db } from './database';
+import { getDatabaseUtils } from './database';
 
 interface MonthlyAnalytics {
   total_users: number;
@@ -35,14 +35,16 @@ interface OptimizationOpportunity {
   impact: 'low' | 'medium' | 'high';
 }
 
-class CostAnalytics {
+export class CostAnalytics {
+  private db = getDatabaseUtils();
+
   async generateMonthlyAnalytics(): Promise<MonthlyAnalytics> {
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
     // Get all active users and their usage
-    const { data: users, error: usersError } = await db.supabase
+    const { data: users, error: usersError } = await this.db.supabase
       .from('users')
       .select(`
         id,
@@ -187,7 +189,7 @@ class CostAnalytics {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     // Get daily aggregated data
-    const { data, error } = await db.supabase
+    const { data, error } = await this.db.supabase
       .from('api_usage')
       .select(`
         created_at,
@@ -388,7 +390,7 @@ class CostAnalytics {
 
   // Additional analytics methods for comprehensive insights
   async getUserCostDistribution(): Promise<any> {
-    const { data, error } = await db.supabase
+    const { data, error } = await this.db.supabase
       .from('api_usage')
       .select(`
         user_id,
@@ -439,7 +441,7 @@ class CostAnalytics {
   }
 
   async getModelEfficiencyMetrics(): Promise<any> {
-    const { data, error } = await db.supabase
+    const { data, error } = await this.db.supabase
       .from('api_usage')
       .select('model_used, cost_usd, tokens_total')
       .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());

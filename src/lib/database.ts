@@ -1,35 +1,41 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/types/database';
 import { config } from './config';
+import { getSupabaseServiceClient, getSafeSupabaseServiceClient } from './supabase-client';
+import { databaseConfig } from './config';
 
 // Create Supabase client
-export const supabase: SupabaseClient<Database> = createClient(
-  config.supabase.url,
-  config.supabase.serviceRoleKey,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
-);
+const supabase = getSupabaseServiceClient();
 
 // Database utilities
 export class DatabaseUtils {
-  private client: SupabaseClient<Database>;
+  private client: any = null;
 
-  constructor() {
-    this.client = supabase;
+  // Runtime initialization instead of constructor
+  private getClient() {
+    if (!this.client) {
+      this.client = getSupabaseServiceClient();
+    }
+    return this.client;
+  }
+  
+  // Safe client getter
+  private getSafeClient() {
+    try {
+      return this.getClient();
+    } catch (error) {
+      console.error('Failed to get database client:', error);
+      return null;
+    }
   }
 
-  // Getter to access the supabase client directly when needed
-  get supabase(): SupabaseClient<Database> {
-    return this.client;
+  // Public getter for supabase client (for backwards compatibility)
+  get supabase() {
+    return this.getClient();
   }
 
   async testConnection(): Promise<boolean> {
     try {
-      const { error } = await this.client
+      const { error } = await this.getSafeClient()
         .from('users')
         .select('count')
         .limit(1);
@@ -42,7 +48,7 @@ export class DatabaseUtils {
   }
 
   async createUser(userData: Database['public']['Tables']['users']['Insert']) {
-    const { data, error } = await this.client
+    const { data, error } = await this.getSafeClient()
       .from('users')
       .insert(userData)
       .select()
@@ -53,7 +59,7 @@ export class DatabaseUtils {
   }
 
   async getUserByTelegramId(telegramId: number) {
-    const { data, error } = await this.client
+    const { data, error } = await this.getSafeClient()
       .from('users')
       .select(`
         *,
@@ -67,7 +73,7 @@ export class DatabaseUtils {
   }
 
   async saveConversation(conversationData: Database['public']['Tables']['conversations']['Insert']) {
-    const { data, error } = await this.client
+    const { data, error } = await this.getSafeClient()
       .from('conversations')
       .insert(conversationData)
       .select()
@@ -78,7 +84,7 @@ export class DatabaseUtils {
   }
 
   async createCrisisEvent(crisisData: Database['public']['Tables']['crisis_events']['Insert']) {
-    const { data, error } = await this.client
+    const { data, error } = await this.getSafeClient()
       .from('crisis_events')
       .insert(crisisData)
       .select()
@@ -92,7 +98,7 @@ export class DatabaseUtils {
     userId: string, 
     profileData: Database['public']['Tables']['user_psychological_profiles']['Update']
   ) {
-    const { data, error } = await this.client
+    const { data, error } = await this.getSafeClient()
       .from('user_psychological_profiles')
       .upsert({
         user_id: userId,
@@ -107,7 +113,7 @@ export class DatabaseUtils {
   }
 
   async trackApiUsage(usageData: Database['public']['Tables']['api_usage']['Insert']) {
-    const { error } = await this.client
+    const { error } = await this.getSafeClient()
       .from('api_usage')
       .insert(usageData);
 
@@ -115,7 +121,7 @@ export class DatabaseUtils {
   }
 
   async getDailyCost(userId: string, date = new Date().toISOString().split('T')[0]) {
-    const { data, error } = await this.client
+    const { data, error } = await this.getSafeClient()
       .rpc('get_daily_cost', {
         user_uuid: userId,
         target_date: date
@@ -126,7 +132,7 @@ export class DatabaseUtils {
   }
 
   async getRecentConversations(userId: string, limit = 10) {
-    const { data, error } = await this.client
+    const { data, error } = await this.getSafeClient()
       .from('conversations')
       .select('*')
       .eq('user_id', userId)
@@ -138,7 +144,7 @@ export class DatabaseUtils {
   }
 
   async cleanExpiredSessions() {
-    const { data, error } = await this.client
+    const { data, error } = await this.getSafeClient()
       .rpc('clean_expired_sessions');
 
     if (error) throw error;
@@ -146,7 +152,7 @@ export class DatabaseUtils {
   }
 
   async updateUserActivity(userId: string) {
-    const { error } = await this.client
+    const { error } = await this.getSafeClient()
       .from('users')
       .update({
         last_message_date: new Date().toISOString().split('T')[0],
@@ -159,7 +165,7 @@ export class DatabaseUtils {
   }
 
   async getUserSession(userId: string) {
-    const { data, error } = await this.client
+    const { data, error } = await this.getSafeClient()
       .from('active_sessions')
       .select('*')
       .eq('user_id', userId)
@@ -173,7 +179,7 @@ export class DatabaseUtils {
     userId: string, 
     sessionData: Database['public']['Tables']['active_sessions']['Update']
   ) {
-    const { data, error } = await this.client
+    const { data, error } = await this.getSafeClient()
       .from('active_sessions')
       .upsert({
         user_id: userId,
@@ -189,7 +195,7 @@ export class DatabaseUtils {
   }
 
   async saveProgressMetric(metricData: Database['public']['Tables']['progress_metrics']['Insert']) {
-    const { data, error } = await this.client
+    const { data, error } = await this.getSafeClient()
       .from('progress_metrics')
       .insert(metricData)
       .select()
@@ -200,7 +206,7 @@ export class DatabaseUtils {
   }
 
   async getUserProgressMetrics(userId: string, metricType?: string, limit = 50) {
-    let query = this.client
+    let query = this.getSafeClient()
       .from('progress_metrics')
       .select('*')
       .eq('user_id', userId)
@@ -217,7 +223,7 @@ export class DatabaseUtils {
   }
 
   async saveFeedback(feedbackData: Database['public']['Tables']['user_feedback']['Insert']) {
-    const { data, error } = await this.client
+    const { data, error } = await this.getSafeClient()
       .from('user_feedback')
       .insert(feedbackData)
       .select()
@@ -228,7 +234,7 @@ export class DatabaseUtils {
   }
 
   async getSystemConfig(key: string, environment = 'all') {
-    const { data, error } = await this.client
+    const { data, error } = await this.getSafeClient()
       .from('system_config')
       .select('value')
       .eq('key', key)
@@ -246,7 +252,7 @@ export class DatabaseUtils {
     description?: string,
     environment = 'all'
   ) {
-    const { data, error } = await this.client
+    const { data, error } = await this.getSafeClient()
       .from('system_config')
       .upsert({
         key,
@@ -263,7 +269,7 @@ export class DatabaseUtils {
   }
 
   async getCrisisEvents(userId?: string, resolved?: boolean, limit = 50) {
-    let query = this.client
+    let query = this.getSafeClient()
       .from('crisis_events')
       .select(`
         *,
@@ -286,7 +292,7 @@ export class DatabaseUtils {
   }
 
   async resolveCrisisEvent(eventId: string, resolutionNotes: string) {
-    const { data, error } = await this.client
+    const { data, error } = await this.getSafeClient()
       .from('crisis_events')
       .update({
         resolved: true,
@@ -305,7 +311,7 @@ export class DatabaseUtils {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    let query = this.client
+    let query = this.getSafeClient()
       .from('api_usage')
       .select('*')
       .gte('created_at', startDate.toISOString())
@@ -324,7 +330,7 @@ export class DatabaseUtils {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    const { data, error } = await this.client
+    const { data, error } = await this.getSafeClient()
       .from('api_usage')
       .select('cost_usd')
       .gte('created_at', startDate.toISOString());
@@ -336,11 +342,11 @@ export class DatabaseUtils {
   }
 
   async getUserStats() {
-    const { count: totalUsers, error: usersError } = await this.client
+    const { count: totalUsers, error: usersError } = await this.getSafeClient()
       .from('users')
       .select('*', { count: 'exact', head: true });
 
-    const { count: activeUsers, error: activeError } = await this.client
+    const { count: activeUsers, error: activeError } = await this.getSafeClient()
       .from('users')
       .select('*', { count: 'exact', head: true })
       .gte('last_message_date', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
@@ -354,6 +360,67 @@ export class DatabaseUtils {
       active_last_7_days: activeUsers || 0
     };
   }
+
+  async createCrisisAssistant(assistantData: any) {
+    const client = this.getSafeClient();
+    if (!client) {
+      throw new Error('Database client not available');
+    }
+
+    // ... existing code ...
+  }
+
+  async getCrisisAssistant(assistantId: string) {
+    const client = this.getSafeClient();
+    if (!client) {
+      throw new Error('Database client not available');
+    }
+
+    // ... existing code ...
+  }
+
+  async updateCrisisAssistant(assistantId: string, updates: any) {
+    const client = this.getSafeClient();
+    if (!client) {
+      throw new Error('Database client not available');
+    }
+
+    // ... existing code ...
+  }
+
+  async deleteCrisisAssistant(assistantId: string) {
+    const client = this.getSafeClient();
+    if (!client) {
+      throw new Error('Database client not available');
+    }
+
+    // ... existing code ...
+  }
+
+  async listCrisisAssistants() {
+    const client = this.getSafeClient();
+    if (!client) {
+      throw new Error('Database client not available');
+    }
+
+    // ... existing code ...
+  }
 }
 
-export const db = new DatabaseUtils(); 
+// Create factory function instead of direct instantiation
+export function createDatabaseUtils(): DatabaseUtils {
+  return new DatabaseUtils();
+}
+
+// Export a function to get database utils instead of module-level instance
+export function getDatabaseUtils(): DatabaseUtils {
+  try {
+    return createDatabaseUtils();
+  } catch (error) {
+    console.error('Failed to create database utils:', error);
+    throw error;
+  }
+}
+
+// For backwards compatibility, export a db instance factory
+export const db = getDatabaseUtils(); 

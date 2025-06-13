@@ -1,75 +1,133 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { DatabaseUtils } from '@/lib/database';
-
-const db = new DatabaseUtils();
+import { getDatabaseUtils } from '@/lib/database';
+import { canCreateSupabaseClient } from '@/lib/supabase-client';
 
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await authenticateAdmin(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Check if environment is ready
+    if (!canCreateSupabaseClient()) {
+      return NextResponse.json(
+        { error: 'Database configuration not available' },
+        { status: 503 }
+      );
     }
 
+    // Initialize database utils at runtime
+    const db = getDatabaseUtils();
+    
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status') || 'all';
-    const severity = searchParams.get('severity');
-    const hours = parseInt(searchParams.get('hours') || '24');
+    const assistantId = searchParams.get('id');
 
-    const startTime = new Date();
-    startTime.setHours(startTime.getHours() - hours);
-
-    // Build query for crisis events
-    let query = db.supabase
-      .from('crisis_events')
-      .select(`
-        *,
-        users!inner(telegram_id, first_name, subscription_tier)
-      `)
-      .gte('created_at', startTime.toISOString())
-      .order('created_at', { ascending: false });
-
-    if (status !== 'all') {
-      switch (status) {
-        case 'unresolved':
-          query = query.eq('resolved', false);
-          break;
-        case 'resolved':
-          query = query.eq('resolved', true);
-          break;
-        case 'escalated':
-          query = query.not('escalated_to', 'is', null);
-          break;
-      }
+    if (assistantId) {
+      const assistant = await db.getCrisisAssistant(assistantId);
+      return NextResponse.json(assistant);
+    } else {
+      const assistants = await db.listCrisisAssistants();
+      return NextResponse.json(assistants);
     }
-
-    if (severity) {
-      const severityNum = parseInt(severity);
-      query = query.gte('severity_level', severityNum);
-    }
-
-    const { data: crisisEvents, error } = await query;
-
-    if (error) throw error;
-
-    // Generate summary statistics
-    const summary = generateCrisisSummary(crisisEvents);
-
-    return NextResponse.json({
-      success: true,
-      data: crisisEvents,
-      summary,
-      filters: {
-        status,
-        severity,
-        hours
-      }
-    });
-
   } catch (error) {
-    console.error('Crisis API error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error' 
-    }, { status: 500 });
+    console.error('Crisis API GET error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch crisis assistants' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    // Check if environment is ready
+    if (!canCreateSupabaseClient()) {
+      return NextResponse.json(
+        { error: 'Database configuration not available' },
+        { status: 503 }
+      );
+    }
+
+    // Initialize database utils at runtime
+    const db = getDatabaseUtils();
+    
+    const assistantData = await request.json();
+    const result = await db.createCrisisAssistant(assistantData);
+    
+    return NextResponse.json(result, { status: 201 });
+  } catch (error) {
+    console.error('Crisis API POST error:', error);
+    return NextResponse.json(
+      { error: 'Failed to create crisis assistant' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    // Check if environment is ready
+    if (!canCreateSupabaseClient()) {
+      return NextResponse.json(
+        { error: 'Database configuration not available' },
+        { status: 503 }
+      );
+    }
+
+    // Initialize database utils at runtime
+    const db = getDatabaseUtils();
+    
+    const { searchParams } = new URL(request.url);
+    const assistantId = searchParams.get('id');
+    
+    if (!assistantId) {
+      return NextResponse.json(
+        { error: 'Assistant ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const updates = await request.json();
+    const result = await db.updateCrisisAssistant(assistantId, updates);
+    
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error('Crisis API PUT error:', error);
+    return NextResponse.json(
+      { error: 'Failed to update crisis assistant' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    // Check if environment is ready
+    if (!canCreateSupabaseClient()) {
+      return NextResponse.json(
+        { error: 'Database configuration not available' },
+        { status: 503 }
+      );
+    }
+
+    // Initialize database utils at runtime
+    const db = getDatabaseUtils();
+    
+    const { searchParams } = new URL(request.url);
+    const assistantId = searchParams.get('id');
+    
+    if (!assistantId) {
+      return NextResponse.json(
+        { error: 'Assistant ID is required' },
+        { status: 400 }
+      );
+    }
+
+    await db.deleteCrisisAssistant(assistantId);
+    
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Crisis API DELETE error:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete crisis assistant' },
+      { status: 500 }
+    );
   }
 }
 

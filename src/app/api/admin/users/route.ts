@@ -1,123 +1,97 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { userManager } from '@/lib/user-manager';
-import { DatabaseUtils } from '@/lib/database';
-
-const db = new DatabaseUtils();
+import { getDatabaseUtils } from '@/lib/database';
 
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await authenticateAdmin(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+    const db = getDatabaseUtils();
+    
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
+    const status = searchParams.get('status') || 'all';
+    const subscription = searchParams.get('subscription');
     const limit = parseInt(searchParams.get('limit') || '50');
-    const tier = searchParams.get('tier');
-    const sortBy = searchParams.get('sort') || 'created_at';
 
-    // Build query
+    // Build query for users
     let query = db.supabase
       .from('users')
       .select(`
         *,
-        user_psychological_profiles(stress_level, crisis_risk_level, support_system_strength)
+        user_psychological_profiles (
+          emotional_state,
+          stress_level,
+          crisis_risk_level
+        )
       `)
-      .order(sortBy, { ascending: false })
-      .range((page - 1) * limit, page * limit - 1);
+      .order('created_at', { ascending: false })
+      .limit(limit);
 
-    if (tier) {
-      query = query.eq('subscription_tier', tier);
+    if (subscription && subscription !== 'all') {
+      query = query.eq('subscription_tier', subscription);
     }
 
     const { data: users, error } = await query;
-
     if (error) throw error;
 
-    // Enrich with usage data
-    const enrichedUsers = await Promise.all(
-      users.map(async (user) => {
-        const usage = await db.getApiUsageStats(user.id);
+    // Add activity status to each user
+    const enhancedUsers = await Promise.all(
+      users.map(async (user: any) => {
+        const lastMessage = new Date(user.last_active);
+        const now = new Date();
+        const hoursSinceLastMessage = (now.getTime() - lastMessage.getTime()) / (1000 * 60 * 60);
+
+        let activityStatus = 'active';
+        if (hoursSinceLastMessage > 168) { // 7 days
+          activityStatus = 'inactive';
+        } else if (hoursSinceLastMessage > 24) {
+          activityStatus = 'dormant';
+        }
+
         return {
           ...user,
-          usage_stats: usage
+          activity_status: activityStatus,
+          hours_since_last_active: Math.floor(hoursSinceLastMessage)
         };
       })
     );
 
     return NextResponse.json({
       success: true,
-      data: enrichedUsers,
-      pagination: {
-        page,
-        limit,
-        total: enrichedUsers.length
+      data: enhancedUsers,
+      total: users.length,
+      filters: {
+        status,
+        subscription,
+        limit
       }
     });
 
   } catch (error) {
-    console.error('Admin users API error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error' 
-    }, { status: 500 });
+    console.error('Users API error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch users' },
+      { status: 500 }
+    );
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function PUT(request: NextRequest) {
   try {
-    const authResult = await authenticateAdmin(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const db = getDatabaseUtils();
+    
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('id');
+    
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'User ID is required' },
+        { status: 400 }
+      );
     }
 
-    const body = await request.json();
-    const { action, userId, data } = body;
-
-    switch (action) {
-      case 'update_subscription':
-        return await handleSubscriptionUpdate(userId, data.tier);
-      case 'reset_usage':
-        return await handleUsageReset(userId);
-      case 'update_profile':
-        return await handleProfileUpdate(userId, data);
-      default:
-        return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-    }
-
-  } catch (error) {
-    console.error('Admin users POST error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error' 
-    }, { status: 500 });
-  }
-}
-
-async function authenticateAdmin(request: NextRequest) {
-  const authHeader = request.headers.get('authorization');
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return { success: false };
-  }
-  
-  const token = authHeader.substring(7);
-  
-  // Check admin API key
-  if (token !== process.env.ADMIN_API_KEY) {
-    return { success: false };
-  }
-  
-  return { success: true };
-}
-
-async function handleSubscriptionUpdate(userId: string, tier: string) {
-  try {
+    const updates = await request.json();
+    
     const { data, error } = await db.supabase
       .from('users')
-      .update({ 
-        subscription_tier: tier,
-        updated_at: new Date().toISOString()
-      })
+      .update(updates)
       .eq('id', userId)
       .select()
       .single();
@@ -126,51 +100,46 @@ async function handleSubscriptionUpdate(userId: string, tier: string) {
 
     return NextResponse.json({
       success: true,
-      message: `Subscription updated to ${tier}`,
       data
     });
+
   } catch (error) {
-    return NextResponse.json({ 
-      error: 'Failed to update subscription' 
-    }, { status: 500 });
+    console.error('User update error:', error);
+    return NextResponse.json(
+      { error: 'Failed to update user' },
+      { status: 500 }
+    );
   }
 }
 
-async function handleUsageReset(userId: string) {
+export async function DELETE(request: NextRequest) {
   try {
+    const db = getDatabaseUtils();
+    
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('id');
+    
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'User ID is required' },
+        { status: 400 }
+      );
+    }
+
     const { error } = await db.supabase
       .from('users')
-      .update({ 
-        daily_message_count: 0,
-        last_message_date: new Date().toISOString()
-      })
+      .delete()
       .eq('id', userId);
 
     if (error) throw error;
 
-    return NextResponse.json({
-      success: true,
-      message: 'Usage reset successfully'
-    });
-  } catch (error) {
-    return NextResponse.json({ 
-      error: 'Failed to reset usage' 
-    }, { status: 500 });
-  }
-}
+    return NextResponse.json({ success: true });
 
-async function handleProfileUpdate(userId: string, profileData: any) {
-  try {
-    const updatedProfile = await userManager.updatePsychologicalProfile(userId, profileData);
-
-    return NextResponse.json({
-      success: true,
-      message: 'Profile updated successfully',
-      data: updatedProfile
-    });
   } catch (error) {
-    return NextResponse.json({ 
-      error: 'Failed to update profile' 
-    }, { status: 500 });
+    console.error('User deletion error:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete user' },
+      { status: 500 }
+    );
   }
 } 

@@ -1,4 +1,4 @@
-import { db } from './database';
+import { getDatabaseUtils } from './database';
 
 interface CostUsage {
   daily_remaining: number;
@@ -27,7 +27,16 @@ interface LimitCheck {
   monthlyRemaining: number;
 }
 
-class CostMonitor {
+interface MonthlyStats {
+  total_cost: number;
+  total_tokens: number;
+  daily_average: number;
+  projected_monthly: number;
+}
+
+export class CostMonitor {
+  private db = getDatabaseUtils();
+
   private readonly TIER_LIMITS: Record<string, {
     daily_messages: number;
     monthly_cost_target: number;
@@ -112,7 +121,7 @@ class CostMonitor {
       const cost_cad = metadata.cost_usd * 1.35;
 
       // Save API usage record
-      const { error } = await db.supabase
+      const { error } = await this.db.supabase
         .from('api_usage')
         .insert({
           user_id: userId,
@@ -130,7 +139,7 @@ class CostMonitor {
 
       // Update conversation record with cost data
       if (metadata.conversation_id) {
-        await db.supabase
+        await this.db.supabase
           .from('conversations')
           .update({
             tokens_used: metadata.tokens_used,
@@ -177,7 +186,7 @@ class CostMonitor {
   }
 
   private async getUserInfo(userId: string) {
-    const { data, error } = await db.supabase
+    const { data, error } = await this.db.supabase
       .from('users')
       .select('subscription_tier, daily_message_count, last_message_date')
       .eq('id', userId)
@@ -190,7 +199,7 @@ class CostMonitor {
   private async getDailyUsage(userId: string) {
     const today = new Date().toISOString().split('T')[0];
     
-    const { data, error } = await db.supabase
+    const { data, error } = await this.db.supabase
       .from('api_usage')
       .select('cost_usd')
       .eq('user_id', userId)
@@ -210,7 +219,7 @@ class CostMonitor {
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    const { data, error } = await db.supabase
+    const { data, error } = await this.db.supabase
       .from('api_usage')
       .select('cost_usd, tokens_total')
       .eq('user_id', userId)
@@ -240,7 +249,7 @@ class CostMonitor {
     }
 
     // Update user counters
-    const { error } = await db.supabase
+    const { error } = await this.db.supabase
       .from('users')
       .update({
         daily_message_count: newDailyCount,
@@ -321,6 +330,59 @@ class CostMonitor {
     }
 
     // In production, this would trigger alerts to monitoring systems
+  }
+
+  async getDailyCost(userId: string, date = new Date().toISOString().split('T')[0]): Promise<number> {
+    try {
+      const { data, error } = await this.db.supabase
+        .from('api_usage')
+        .select('cost_usd')
+        .eq('user_id', userId)
+        .gte('created_at', date)
+        .lte('created_at', `${date}T23:59:59.999Z`);
+
+      if (error) throw error;
+
+      const total_cost = (data?.reduce((sum: number, record: any) => sum + record.cost_usd, 0) || 0) * 1.35; // Convert to CAD
+      return total_cost;
+    } catch (error) {
+      console.error('Error getting daily cost:', error);
+      return 0;
+    }
+  }
+
+  async getMonthlyStats(userId: string): Promise<MonthlyStats> {
+    try {
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { data, error } = await this.db.supabase
+        .from('api_usage')
+        .select('cost_usd, tokens_total')
+        .eq('user_id', userId)
+        .gte('created_at', startOfMonth.toISOString());
+
+      if (error) throw error;
+
+      const total_cost = (data?.reduce((sum: number, record: any) => sum + record.cost_usd, 0) || 0) * 1.35; // Convert to CAD
+      const total_tokens = data?.reduce((sum: number, record: any) => sum + record.tokens_total, 0) || 0;
+
+      return {
+        total_cost,
+        total_tokens,
+        daily_average: total_cost / new Date().getDate(),
+        projected_monthly: (total_cost / new Date().getDate()) * 30
+      };
+    } catch (error) {
+      console.error('Error getting monthly stats:', error);
+      return {
+        total_cost: 0,
+        total_tokens: 0,
+        daily_average: 0,
+        projected_monthly: 0
+      };
+    }
   }
 }
 

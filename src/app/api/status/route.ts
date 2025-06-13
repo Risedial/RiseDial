@@ -1,11 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { costAnalytics } from '@/lib/cost-analytics';
-import { DatabaseUtils } from '@/lib/database';
-
-const db = new DatabaseUtils();
+import { getDatabaseUtils } from '@/lib/database';
 
 export async function GET(request: NextRequest) {
   try {
+    const db = getDatabaseUtils();
+    
+    // Get basic system metrics
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // Get conversation activity (last hour)
+    const { data: conversations } = await db.supabase
+      .from('conversations')
+      .select('id')
+      .gte('created_at', oneHourAgo.toISOString());
+
+    // Get new users (last 24 hours)
+    const { data: newUsers } = await db.supabase
+      .from('users')
+      .select('id')
+      .gte('created_at', twentyFourHoursAgo.toISOString());
+
+    // Get crisis events (last 24 hours)
+    const { data: crisisEvents } = await db.supabase
+      .from('crisis_events')
+      .select('id, severity_level, resolved')
+      .gte('created_at', twentyFourHoursAgo.toISOString());
+
+    // Calculate response time metrics
+    const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
+    
+    // Get recent response times
+    const { data: responseTimes } = await db.supabase
+      .from('api_usage')
+      .select('response_time_ms')
+      .gte('created_at', thirtyMinutesAgo.toISOString());
+
     const systemStatus = await generateSystemStatus();
     
     return NextResponse.json({
@@ -15,10 +47,11 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('System status error:', error);
-    return NextResponse.json({ 
-      error: 'Failed to generate system status' 
-    }, { status: 500 });
+    console.error('Status API error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch system status' },
+      { status: 500 }
+    );
   }
 }
 
@@ -58,19 +91,19 @@ async function getRecentActivity() {
   oneHourAgo.setHours(oneHourAgo.getHours() - 1);
 
   // Recent conversations
-  const { data: conversations } = await db.supabase
+  const { data: conversations } = await getDatabaseUtils().supabase
     .from('conversations')
     .select('count')
     .gte('created_at', oneHourAgo.toISOString());
 
   // Recent users
-  const { data: newUsers } = await db.supabase
+  const { data: newUsers } = await getDatabaseUtils().supabase
     .from('users')
     .select('count')
     .gte('created_at', oneHourAgo.toISOString());
 
   // Recent crisis events
-  const { data: crisisEvents } = await db.supabase
+  const { data: crisisEvents } = await getDatabaseUtils().supabase
     .from('crisis_events')
     .select('count')
     .gte('created_at', oneHourAgo.toISOString());
@@ -84,7 +117,7 @@ async function getRecentActivity() {
 
 async function getPerformanceMetrics() {
   // Get average response times
-  const { data: responseTimes } = await db.supabase
+  const { data: responseTimes } = await getDatabaseUtils().supabase
     .from('conversations')
     .select('response_time_ms')
     .not('response_time_ms', 'is', null)

@@ -3,6 +3,12 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "installCommand": "npm ci",
+  "regions": ["iad1"],
+  "functions": {
+    "src/app/api/**/*.ts": {
+      "maxDuration": 30
+    }
+  },
   "headers": [
     {
       "source": "/api/(.*)",
@@ -15,5 +21,20 @@
   ],
   "rewrites": [
     { "source": "/health", "destination": "/api/health" }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "build": {
+    "env": {
+      "NODE_ENV": "production",
+      "NEXT_TELEMETRY_DISABLED": "1"
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/admin/cleanup",
+      "schedule": "0 2 * * *"
+    }
   ]
 } 

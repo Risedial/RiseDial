@@ -1,4 +1,4 @@
-import { db } from './database';
+import { getDatabaseUtils } from './database';
 import { MessageContext } from '@/types/conversation';
 
 interface SessionData {
@@ -10,16 +10,18 @@ interface SessionData {
 }
 
 export class SessionManager {
+  private db = getDatabaseUtils();
+
   async buildMessageContext(userId: string): Promise<MessageContext> {
     try {
       // Get or create session
       const session = await this.getOrCreateSession(userId);
       
       // Get recent conversations for context
-      const recentMessages = await db.getRecentConversations(userId, 10);
+      const recentMessages = await this.db.getRecentConversations(userId, 10);
       
       // Get user profile
-      const user = await db.getUserByTelegramId(parseInt(userId));
+      const user = await this.db.getUserByTelegramId(parseInt(userId));
       
       return {
         userId,
@@ -46,7 +48,7 @@ export class SessionManager {
   async getOrCreateSession(userId: string): Promise<SessionData> {
     try {
       // Try to get existing session
-      const existingSession = await db.getUserSession(userId);
+      const existingSession = await this.db.getUserSession(userId);
       
       if (existingSession && new Date(existingSession.expires_at) > new Date()) {
         return {
@@ -63,7 +65,7 @@ export class SessionManager {
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + 24); // 24 hour expiry
       
-      const newSession = await db.updateUserSession(userId, {
+      const newSession = await this.db.updateUserSession(userId, {
         id: sessionId,
         compressed_context: {},
         context_version: 1,
@@ -95,9 +97,9 @@ export class SessionManager {
   async incrementMessageCount(sessionId: string): Promise<void> {
     try {
       // Update session with incremented message count
-      const session = await db.getUserSession(sessionId);
+      const session = await this.db.getUserSession(sessionId);
       if (session) {
-        await db.updateUserSession(session.user_id, {
+        await this.db.updateUserSession(session.user_id, {
           messages_since_compression: (session.messages_since_compression || 0) + 1,
           last_activity: new Date().toISOString()
         });
@@ -109,14 +111,14 @@ export class SessionManager {
 
   async updateSessionContext(sessionId: string, contextUpdate: any): Promise<void> {
     try {
-      const session = await db.getUserSession(sessionId);
+      const session = await this.db.getUserSession(sessionId);
       if (session) {
         const updatedContext = {
           ...session.compressed_context,
           ...contextUpdate
         };
         
-        await db.updateUserSession(session.user_id, {
+        await this.db.updateUserSession(session.user_id, {
           compressed_context: updatedContext,
           context_version: (session.context_version || 1) + 1
         });

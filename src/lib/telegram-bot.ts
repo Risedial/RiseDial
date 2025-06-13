@@ -5,7 +5,12 @@ import { sessionManager } from './session-manager';
 import { aiOrchestrator } from './ai-orchestrator';
 import { costMonitor } from './cost-monitor';
 import { safetyProtocols } from './safety-protocols';
-import { db } from './database';
+import { getDatabaseUtils } from './database';
+import { Telegraf, Context, Markup } from 'telegraf';
+import { message } from 'telegraf/filters';
+import { Message } from 'telegraf/typings/core/types/typegram';
+import { handleCrisisSituation } from './crisis-handlers';
+import { conversationHandler } from './conversation-handler';
 
 export class TelegramBot {
   private bot: TelegramBotAPI;
@@ -355,7 +360,7 @@ Continue our conversation anytime!`;
 
   private async saveConversation(userId: number, userMessage: string, aiResponse: any) {
     // Save user message
-    await db.saveConversation({
+    await getDatabaseUtils().saveConversation({
       user_id: userId.toString(),
       message_text: userMessage,
       message_type: 'user',
@@ -367,7 +372,7 @@ Continue our conversation anytime!`;
     });
 
     // Save assistant response
-    await db.saveConversation({
+    await getDatabaseUtils().saveConversation({
       user_id: userId.toString(),
       message_text: aiResponse.companion_response,
       message_type: 'assistant',

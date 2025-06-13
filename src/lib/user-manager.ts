@@ -1,5 +1,5 @@
-import { db } from './database';
-import { supabase } from './database';
+import { getDatabaseUtils } from './database';
+import { TelegramUser } from './telegram-bot';
 import { DbUser, DbPsychProfile, DbProgressMetric } from '@/types/database';
 
 interface UserProfile {
@@ -67,64 +67,44 @@ interface UserPreferences {
   };
 }
 
-class UserManager {
+export class UserManager {
+  private db = getDatabaseUtils();
+
   async createOrUpdateUser(telegramUser: any): Promise<UserProfile> {
     try {
       // Check if user exists
-      const existingUser = await this.getUserByTelegramId(telegramUser.id);
+      let user = await this.db.getUserByTelegramId(telegramUser.id);
       
-      if (existingUser) {
+      if (!user) {
+        // Create new user
+        const userData = {
+          telegram_id: telegramUser.id,
+          first_name: telegramUser.first_name,
+          last_name: telegramUser.last_name || null,
+          username: telegramUser.username || null,
+          subscription_tier: 'free' as const,
+          created_at: new Date().toISOString(),
+          last_active: new Date().toISOString()
+        };
+        
+        user = await this.db.createUser(userData);
+      } else {
         // Update last active
-        return await this.updateLastActive(existingUser.id);
+        await this.db.updateUserActivity(user.id);
       }
 
-      // Create new user
-      const newUser = {
-        telegram_id: telegramUser.id,
-        first_name: telegramUser.first_name,
-        username: telegramUser.username,
-        subscription_tier: 'basic' as const,
-        daily_message_count: 0,
-        last_message_date: new Date().toISOString().split('T')[0],
-        total_messages: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .insert(newUser)
-        .select()
-        .single();
-
-      if (userError) throw userError;
-
-      // Create psychological profile
-      const psychProfile = {
-        user_id: userData.id,
-        ...this.createDefaultPsychologicalProfileData(),
-        updated_at: new Date().toISOString()
-      };
-
-      const { data: profileData, error: profileError } = await supabase
-        .from('user_psychological_profiles')
-        .insert(psychProfile)
-        .select()
-        .single();
-
-      if (profileError) throw profileError;
-
-      console.log(`Created new user: ${telegramUser.first_name} (${telegramUser.id})`);
-      
       return {
-        ...userData,
-        onboarding_completed: false,
-        psychological_profile: this.mapDbProfileToUserProfile(profileData),
-        progress_metrics: this.createDefaultProgressMetrics(),
-        preferences: this.createDefaultPreferences(),
-        last_active: userData.updated_at
+        id: user.id,
+        telegramId: user.telegram_id,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        username: user.username,
+        subscriptionTier: user.subscription_tier,
+        createdAt: user.created_at,
+        lastActive: user.last_active,
+        dailyMessageCount: user.daily_message_count,
+        psychologicalProfile: null
       };
-
     } catch (error) {
       console.error('Error creating/updating user:', error);
       throw error;
