@@ -19,9 +19,12 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.38.0",
+    "autoprefixer": "^10.4.21",
     "next": "^14.0.0",
     "node-telegram-bot-api": "^0.64.0",
     "openai": "^4.104.0",
+    "postcss": "^8.5.5",
+    "tailwindcss": "^4.1.10",
     "typescript": "^5.0.0"
   },
   "devDependencies": {
