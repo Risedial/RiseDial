@@ -84,7 +84,7 @@
    
    # Crisis detection settings
    CRISIS_WEBHOOK_URL=https://your-app.vercel.app/api/webhooks/crisis
-   ADMIN_EMAIL=admin@risedial.com
+   ADMIN_EMAIL=support@risedial.com
    
    # Cost management
    DAILY_COST_LIMIT_USD=0.50

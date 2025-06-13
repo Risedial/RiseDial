@@ -27,11 +27,20 @@ export class IntegratedAIService {
 
     // 2. Process message with AI orchestrator
     const startTime = Date.now();
-    const aiResponse = await aiOrchestrator.processMessage(userId, message);
+    
+    // Create a basic context for the AI orchestrator
+    const context = {
+      userId,
+      messageHistory: [], // In a real implementation, this would be populated from database
+      userProfile: null,
+      timestamp: new Date().toISOString()
+    };
+    
+    const aiResponse = await aiOrchestrator.generateResponse(message, context);
     const processingTime = Date.now() - startTime;
 
     // 3. Calculate costs (example token counting)
-    const estimatedTokens = Math.ceil((message.length + aiResponse.response.length) / 4);
+    const estimatedTokens = Math.ceil((message.length + aiResponse.companion_response.length) / 4);
     const estimatedCost = this.calculateAPICost(estimatedTokens, 'gpt-4');
 
     // 4. Track API usage
@@ -39,16 +48,16 @@ export class IntegratedAIService {
       tokens_used: estimatedTokens,
       cost_usd: estimatedCost,
       model_used: 'gpt-4',
-      conversation_id: aiResponse.conversationId,
-      therapeutic_value: aiResponse.therapeuticValue,
-      crisis_risk_level: aiResponse.crisisRisk
+      conversation_id: `conv_${userId}_${Date.now()}`, // Generated conversation ID
+      therapeutic_value: aiResponse.therapeutic_value,
+      crisis_risk_level: aiResponse.crisis_risk_level
     });
 
     // 5. Get updated cost usage
     const costUsage = await costMonitor.getUserCostUsage(userId);
 
     return {
-      response: this.formatResponse(aiResponse.response, limitCheck),
+      response: this.formatResponse(aiResponse.companion_response, limitCheck),
       costInfo: costUsage,
       limitStatus: limitCheck
     };
@@ -85,7 +94,7 @@ export class IntegratedAIService {
   }
 
   private calculateAPICost(tokens: number, model: string): number {
-    const pricing = {
+    const pricing: Record<string, number> = {
       'gpt-4': 0.00003, // $0.03 per 1K tokens
       'gpt-3.5-turbo': 0.000002 // $0.002 per 1K tokens
     };
@@ -114,7 +123,7 @@ export class IntegratedAIService {
     
     const health = {
       status: 'healthy',
-      alerts: [],
+      alerts: [] as string[],
       metrics: {
         profit_margin: analytics.profit_margin,
         cost_per_user: analytics.cost_per_user,
@@ -135,7 +144,7 @@ export class IntegratedAIService {
 
     // Check optimization opportunities
     const highImpactOpportunities = analytics.optimization_opportunities
-      .filter(opp => opp.impact === 'high' && opp.implementation_effort !== 'high');
+      .filter((opp: any) => opp.impact === 'high' && opp.implementation_effort !== 'high');
 
     if (highImpactOpportunities.length > 0) {
       health.alerts.push(`${highImpactOpportunities.length} high-impact optimization opportunities available`);
@@ -175,8 +184,8 @@ export async function dailyCostMonitoringTask() {
   // Generate and log optimization recommendations
   const report = await service.generateAdminReport();
   const opportunities = report.monthly_analytics.optimization_opportunities
-    .filter(opp => opp.potential_savings > 100) // Focus on opportunities saving >$100
-    .sort((a, b) => b.potential_savings - a.potential_savings);
+    .filter((opp: any) => opp.potential_savings > 100) // Focus on opportunities saving >$100
+    .sort((a: any, b: any) => b.potential_savings - a.potential_savings);
 
   if (opportunities.length > 0) {
     console.log('Top cost optimization opportunities:', opportunities.slice(0, 3));

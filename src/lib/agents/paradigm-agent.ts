@@ -10,7 +10,7 @@ export class ParadigmAgent {
       { pattern: /I (have to|must|should) /, belief: 'perfectionism' }
     ];
 
-    const identifiedBeliefs = [];
+    const identifiedBeliefs: string[] = [];
     
     beliefPatterns.forEach(({ pattern, belief }) => {
       if (pattern.test(userMessage.toLowerCase())) {
@@ -20,7 +20,7 @@ export class ParadigmAgent {
 
     // Check against existing profile beliefs
     if (userProfile?.limiting_beliefs) {
-      userProfile.limiting_beliefs.forEach(belief => {
+      userProfile.limiting_beliefs.forEach((belief: any) => {
         if (!identifiedBeliefs.includes(belief)) {
           identifiedBeliefs.push(belief);
         }
@@ -31,7 +31,7 @@ export class ParadigmAgent {
   }
 
   generateReframeOpportunities(limitingBeliefs: string[], userMessage: string): string[] {
-    const reframeMap = {
+    const reframeMap: Record<string, string[]> = {
       'worthiness_conditional': [
         'Your worth isn\'t determined by performance or achievement',
         'You have inherent value regardless of outcomes',
@@ -64,7 +64,7 @@ export class ParadigmAgent {
       ]
     };
 
-    const reframes = [];
+    const reframes: string[] = [];
     limitingBeliefs.forEach(belief => {
       const options = reframeMap[belief] || [];
       if (options.length > 0) {
@@ -77,7 +77,7 @@ export class ParadigmAgent {
 
   suggestIdentityShifts(userMessage: string, userProfile: any): string[] {
     const currentIdentityMarkers = this.extractIdentityLanguage(userMessage);
-    const growthOpportunities = [];
+    const growthOpportunities: string[] = [];
 
     currentIdentityMarkers.forEach(marker => {
       const shifts = this.mapIdentityGrowth(marker);
@@ -91,7 +91,7 @@ export class ParadigmAgent {
       });
     }
 
-    return [...new Set(growthOpportunities)]; // Remove duplicates
+    return Array.from(new Set(growthOpportunities)); // Remove duplicates
   }
 
   private extractIdentityLanguage(message: string): string[] {
@@ -102,7 +102,7 @@ export class ParadigmAgent {
       { pattern: /I'm not (.+)/, type: 'negative_identity' }
     ];
 
-    const markers = [];
+    const markers: string[] = [];
     identityPatterns.forEach(({ pattern, type }) => {
       const matches = message.match(pattern);
       if (matches) {

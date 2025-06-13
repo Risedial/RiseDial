@@ -87,11 +87,11 @@ export class MemoryAgent {
   }
 
   connectContextualDots(userMessage: string, compressedContext: any): string[] {
-    const connections = [];
+    const connections: string[] = [];
 
     // Connect to past themes
     if (compressedContext.session_summary?.key_themes) {
-      compressedContext.session_summary.key_themes.forEach(theme => {
+      compressedContext.session_summary.key_themes.forEach((theme: any) => {
         if (this.messageRelatesTo(userMessage, theme)) {
           connections.push(`relates_to_theme: ${theme}`);
         }
@@ -100,7 +100,7 @@ export class MemoryAgent {
 
     // Connect to previous progress
     if (compressedContext.session_summary?.progress_indicators) {
-      compressedContext.session_summary.progress_indicators.forEach(indicator => {
+      compressedContext.session_summary.progress_indicators.forEach((indicator: any) => {
         if (this.buildsOnProgress(userMessage, indicator)) {
           connections.push(`builds_on_progress: ${indicator}`);
         }
@@ -109,7 +109,7 @@ export class MemoryAgent {
 
     // Connect to coping strategies
     if (compressedContext.user_insights?.coping_strategies) {
-      compressedContext.user_insights.coping_strategies.forEach(strategy => {
+      compressedContext.user_insights.coping_strategies.forEach((strategy: any) => {
         if (this.usesStrategy(userMessage, strategy)) {
           connections.push(`applying_strategy: ${strategy}`);
         }
@@ -130,7 +130,7 @@ export class MemoryAgent {
       'life_purpose': ['purpose', 'meaning', 'direction', 'goals', 'future']
     };
 
-    const themes = new Set();
+    const themes = new Set<string>();
     const messageText = messages.map(m => m.message).join(' ').toLowerCase();
 
     Object.entries(themeKeywords).forEach(([theme, keywords]) => {

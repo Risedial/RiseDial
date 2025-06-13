@@ -2,7 +2,7 @@ export class CompanionAgent {
   
   generateEmpathyResponse(userMessage: string, emotionalTone: string): string {
     // Core empathy patterns based on emotional tone
-    const empathyPatterns = {
+    const empathyPatterns: Record<string, string[]> = {
       'anxious': [
         "I can hear the worry in your message, and that must feel overwhelming.",
         "It sounds like you're carrying a lot of anxiety right now. That's really hard.",

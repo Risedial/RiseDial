@@ -126,7 +126,7 @@ class CostAnalytics {
   }
 
   private calculateTotalRevenue(users: any[]): number {
-    const TIER_REVENUE = {
+    const TIER_REVENUE: Record<string, number> = {
       basic: 9.99,
       premium: 19.99,
       unlimited: 39.99
@@ -139,7 +139,7 @@ class CostAnalytics {
   }
 
   private analyzeUserSegments(users: any[]): UserSegment[] {
-    const segments = {
+    const segments: Record<string, { users: any[]; revenue: number }> = {
       basic: { users: [], revenue: 9.99 },
       premium: { users: [], revenue: 19.99 },
       unlimited: { users: [], revenue: 39.99 }
@@ -410,7 +410,7 @@ class CostAnalytics {
     data.forEach(record => {
       const userId = record.user_id;
       const cost = record.cost_usd * 1.35; // Convert to CAD
-      const tier = record.users.subscription_tier || 'basic';
+      const tier = (record as any).users?.subscription_tier || 'basic';
 
       if (!userCosts.has(userId)) {
         userCosts.set(userId, { cost: 0, tier });
@@ -423,15 +423,15 @@ class CostAnalytics {
       if (cost < 5) {
         distribution.low_cost.count++;
         distribution.low_cost.total_cost += cost;
-        distribution.low_cost.tiers[tier]++;
+        (distribution.low_cost.tiers as any)[tier]++;
       } else if (cost < 15) {
         distribution.medium_cost.count++;
         distribution.medium_cost.total_cost += cost;
-        distribution.medium_cost.tiers[tier]++;
+        (distribution.medium_cost.tiers as any)[tier]++;
       } else {
         distribution.high_cost.count++;
         distribution.high_cost.total_cost += cost;
-        distribution.high_cost.tiers[tier]++;
+        (distribution.high_cost.tiers as any)[tier]++;
       }
     });
 

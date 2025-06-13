@@ -27,7 +27,7 @@ export class TherapistAgent {
   }
 
   generateTherapeuticIntervention(technique: string, userMessage: string): string {
-    const interventions = {
+    const interventions: Record<string, string> = {
       'cognitive_restructuring': this.generateCognitiveReframe(userMessage),
       'exploratory_questioning': this.generateExploratoryQuestion(userMessage),
       'behavioral_activation': this.generateBehavioralSuggestion(userMessage),
@@ -115,7 +115,7 @@ export class TherapistAgent {
 
   predictEffectiveness(technique: string, userProfile: any): number {
     // Base effectiveness scores for techniques
-    const baseScores = {
+    const baseScores: Record<string, number> = {
       'cognitive_restructuring': 8,
       'behavioral_activation': 7,
       'exploratory_questioning': 9,

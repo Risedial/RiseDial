@@ -52,27 +52,31 @@ export class SessionManager {
         return {
           sessionId: existingSession.id,
           userId: existingSession.user_id,
-          messageCount: existingSession.message_count || 0,
+          messageCount: existingSession.messages_since_compression || 0,
           lastActivity: existingSession.last_activity,
-          context: existingSession.context_data || {}
+          context: existingSession.compressed_context || {}
         };
       }
 
       // Create new session
       const sessionId = this.generateSessionId();
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24); // 24 hour expiry
+      
       const newSession = await db.updateUserSession(userId, {
         id: sessionId,
-        message_count: 0,
-        context_data: {},
-        session_quality: 5,
-        engagement_level: 5
+        compressed_context: {},
+        context_version: 1,
+        messages_since_compression: 0,
+        last_activity: new Date().toISOString(),
+        expires_at: expiresAt.toISOString()
       });
 
       return {
-        sessionId: newSession.id,
-        userId: newSession.user_id,
+        sessionId: sessionId,
+        userId: userId,
         messageCount: 0,
-        lastActivity: newSession.last_activity,
+        lastActivity: new Date().toISOString(),
         context: {}
       };
     } catch (error) {
@@ -94,7 +98,7 @@ export class SessionManager {
       const session = await db.getUserSession(sessionId);
       if (session) {
         await db.updateUserSession(session.user_id, {
-          message_count: (session.message_count || 0) + 1,
+          messages_since_compression: (session.messages_since_compression || 0) + 1,
           last_activity: new Date().toISOString()
         });
       }
@@ -108,12 +112,13 @@ export class SessionManager {
       const session = await db.getUserSession(sessionId);
       if (session) {
         const updatedContext = {
-          ...session.context_data,
+          ...session.compressed_context,
           ...contextUpdate
         };
         
         await db.updateUserSession(session.user_id, {
-          context_data: updatedContext
+          compressed_context: updatedContext,
+          context_version: (session.context_version || 1) + 1
         });
       }
     } catch (error) {

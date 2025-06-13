@@ -448,7 +448,7 @@ export class CrisisDetector {
 
   private fuzzyMatch(text: string, keyword: string): boolean {
     // Simple fuzzy matching for common variations
-    const variations = {
+    const variations: Record<string, string[]> = {
       'end it all': ['end it', 'ending it all', 'end everything'],
       'take all these pills': ['take pills', 'taking pills', 'overdose on pills'],
       'no meaning': ['meaningless', 'no point', 'pointless'],

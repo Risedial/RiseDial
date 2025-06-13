@@ -28,7 +28,12 @@ interface LimitCheck {
 }
 
 class CostMonitor {
-  private readonly TIER_LIMITS = {
+  private readonly TIER_LIMITS: Record<string, {
+    daily_messages: number;
+    monthly_cost_target: number;
+    monthly_cost_limit: number;
+    revenue: number;
+  }> = {
     basic: {
       daily_messages: 15,
       monthly_cost_target: 8.00, // CAD
