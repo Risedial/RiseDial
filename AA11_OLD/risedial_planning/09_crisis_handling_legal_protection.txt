@@ -1,0 +1,43 @@
+🛡️ Crisis Handling & Legal Protection
+
+Immediate Implementation Safeguards
+===================================
+
+Crisis Detection Keywords → Automatic Response Protocol:
+├── Self-harm mentions → "I care about you but I'm not equipped for this. Please contact: [Crisis hotline]"
+├── Suicide ideation → Immediate resource referral + conversation pause
+├── Medical advice requests → "I can't provide medical advice. Please consult a healthcare professional"
+├── Legal advice → Clear disclaimer about not being legal counsel
+└── Relationship abuse → Safety resources + professional referral
+
+Terms of Service Must Include:
+- "This is an AI companion for personal growth, not therapy"
+- "Not a substitute for professional mental health care"
+- "Emergency situations require professional help"
+- Clear age restrictions (18+ only)
+
+⚖️ Legal Positioning Framework
+
+Safe Terminology:
+✅ "Personal Growth Companion"
+✅ "Life Coaching AI"
+✅ "Mindset Mentor"
+✅ "Development Partner"
+
+Avoid:
+❌ "Therapy" / "Therapist"
+❌ "Treatment" / "Diagnosis"
+❌ "Mental Health Professional"
+❌ "Psychological Services"
+
+Marketing Language:
+- "Your AI companion for personal evolution"
+- "Unlock your potential through daily conversations"
+- "Like having a wise mentor who remembers everything"
+- "Personal development through intelligent dialogue"
+
+Legal Documentation Needed:
+- Privacy policy (especially for psychological data)
+- Terms clearly stating limitations
+- Professional referral protocols
+- Data retention/deletion policies 

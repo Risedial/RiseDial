@@ -1,0 +1,21 @@
+🚨 Phase 6: Go/No-Go Decision Framework
+
+Red Flags That Stop The Project
+===============================
+Automatic Project Halt Triggers:
+├── AI costs exceed $25 CAD per user per month
+├── Crisis detection has >5% false negative rate
+├── Legal review identifies major liability risks
+├── Technical architecture can't handle 100 concurrent users
+├── User testing shows negative therapeutic outcomes
+└── Break-even requires >2000 users
+
+Success Metrics for Proceed Decision
+===================================
+Green Light Indicators:
+├── Total cost per user under $15 CAD/month
+├── Crisis detection 99%+ accurate in testing
+├── Legal clearance with manageable risk
+├── Technical system handles 500+ concurrent users
+├── User testing shows consistent positive outcomes
+└── Break-even achievable with <500 users 
