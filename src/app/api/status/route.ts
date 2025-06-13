@@ -91,8 +91,8 @@ async function getPerformanceMetrics() {
     .order('created_at', { ascending: false })
     .limit(100);
 
-  const avgResponseTime = responseTimes?.length > 0 ? 
-    responseTimes.reduce((sum, r) => sum + r.response_time_ms, 0) / responseTimes.length : 0;
+  const avgResponseTime = (responseTimes && responseTimes.length > 0) ? 
+    responseTimes.reduce((sum: number, r: any) => sum + (r.response_time_ms || 0), 0) / responseTimes.length : 0;
 
   // System uptime
   const uptime = process.uptime();

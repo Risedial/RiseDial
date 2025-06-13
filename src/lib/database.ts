@@ -22,6 +22,11 @@ export class DatabaseUtils {
     this.client = supabase;
   }
 
+  // Getter to access the supabase client directly when needed
+  get supabase(): SupabaseClient<Database> {
+    return this.client;
+  }
+
   async testConnection(): Promise<boolean> {
     try {
       const { error } = await this.client

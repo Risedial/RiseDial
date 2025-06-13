@@ -8,6 +8,7 @@ interface MonthlyAnalytics {
   user_segments: UserSegment[];
   cost_trends: CostTrend[];
   optimization_opportunities: OptimizationOpportunity[];
+  forecasts?: any[]; // Optional forecasts property
 }
 
 interface UserSegment {
