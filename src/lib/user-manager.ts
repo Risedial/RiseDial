@@ -1,19 +1,20 @@
 import { getDatabaseUtils } from './database';
-import { TelegramUser } from './telegram-bot';
-import { DbUser, DbPsychProfile, DbProgressMetric } from '@/types/database';
+import { getSafeSupabaseAdminClient } from './supabase-client';
+import { 
+  Database, 
+  DbUser, 
+  DbPsychProfile, 
+  DbConversation, 
+  DbProgressMetric,
+  DbCrisisEvent 
+} from '@/types/database';
 
-interface UserProfile {
-  id: string;
-  telegram_id: number;
-  first_name: string;
-  username?: string;
-  subscription_tier: 'basic' | 'premium' | 'unlimited';
+// Extend DbUser to include computed fields for the application layer
+interface UserProfile extends DbUser {
   onboarding_completed: boolean;
   psychological_profile: PsychologicalProfile;
   progress_metrics: ProgressMetrics;
   preferences: UserPreferences;
-  created_at: string;
-  last_active: string;
 }
 
 interface PsychologicalProfile {
@@ -67,24 +68,43 @@ interface UserPreferences {
   };
 }
 
+interface TelegramUser {
+  id: number;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+}
+
+interface SessionData {
+  duration_minutes: number;
+  message_count: number;
+  therapeutic_value: number;
+  emotional_tone: string;
+  crisis_detected: boolean;
+  insights_gained: string[];
+  goals_worked_on: string[];
+}
+
 export class UserManager {
   private db = getDatabaseUtils();
 
-  async createOrUpdateUser(telegramUser: any): Promise<UserProfile> {
+  async createOrUpdateUser(telegramUser: TelegramUser): Promise<UserProfile> {
     try {
       // Check if user exists
       let user = await this.db.getUserByTelegramId(telegramUser.id);
       
       if (!user) {
         // Create new user
-        const userData = {
+        const userData: Database['public']['Tables']['users']['Insert'] = {
           telegram_id: telegramUser.id,
           first_name: telegramUser.first_name,
-          last_name: telegramUser.last_name || null,
           username: telegramUser.username || null,
-          subscription_tier: 'free' as const,
+          subscription_tier: 'basic', // Fixed: changed from 'free' to 'basic'
+          daily_message_count: 0,
+          last_message_date: new Date().toISOString().split('T')[0],
+          total_messages: 0,
           created_at: new Date().toISOString(),
-          last_active: new Date().toISOString()
+          updated_at: new Date().toISOString()
         };
         
         user = await this.db.createUser(userData);
@@ -94,16 +114,11 @@ export class UserManager {
       }
 
       return {
-        id: user.id,
-        telegramId: user.telegram_id,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        username: user.username,
-        subscriptionTier: user.subscription_tier,
-        createdAt: user.created_at,
-        lastActive: user.last_active,
-        dailyMessageCount: user.daily_message_count,
-        psychologicalProfile: null
+        ...user,
+        onboarding_completed: user.user_psychological_profiles?.[0] ? true : false,
+        psychological_profile: this.createDefaultPsychologicalProfile(),
+        progress_metrics: this.createDefaultProgressMetrics(),
+        preferences: this.createDefaultPreferences()
       };
     } catch (error) {
       console.error('Error creating/updating user:', error);
@@ -113,6 +128,11 @@ export class UserManager {
 
   async getUserByTelegramId(telegramId: number): Promise<UserProfile | null> {
     try {
+      const supabase = getSafeSupabaseAdminClient();
+      if (!supabase) {
+        throw new Error('Unable to get Supabase client');
+      }
+
       const { data, error } = await supabase
         .from('users')
         .select(`
@@ -137,8 +157,7 @@ export class UserManager {
           ? this.mapDbProfileToUserProfile(data.user_psychological_profiles[0])
           : this.createDefaultPsychologicalProfile(),
         progress_metrics: progressMetrics,
-        preferences: this.createDefaultPreferences(),
-        last_active: data.updated_at
+        preferences: this.createDefaultPreferences()
       };
     } catch (error) {
       console.error('Error getting user by Telegram ID:', error);
@@ -153,6 +172,11 @@ export class UserManager {
     try {
       const user = await this.getUserById(userId);
       if (!user) throw new Error('User not found');
+
+      const supabase = getSafeSupabaseAdminClient();
+      if (!supabase) {
+        throw new Error('Unable to get Supabase client');
+      }
 
       const updatedProfileData = {
         ...this.mapUserProfileToDbProfile(user.psychological_profile),
@@ -216,92 +240,69 @@ export class UserManager {
     }
   }
 
-  async trackSession(userId: string, sessionData: {
-    duration_minutes: number;
-    message_count: number;
-    therapeutic_value: number;
-    emotional_tone: string;
-    crisis_detected: boolean;
-    insights_gained: string[];
-    goals_worked_on: string[];
-  }): Promise<void> {
+  async trackSession(userId: string, sessionData: SessionData): Promise<void> {
     try {
-      // Create session record in conversations table
-      const sessionId = `session_${Date.now()}_${userId}`;
-      
-      const { error: sessionError } = await supabase
-        .from('conversations')
-        .insert({
-          user_id: userId,
-          message_text: `Session Summary: ${sessionData.duration_minutes} minutes, ${sessionData.message_count} messages`,
-          message_type: 'assistant',
-          emotional_tone: sessionData.emotional_tone,
-          crisis_risk_level: sessionData.crisis_detected ? 8 : 1,
-          therapeutic_value: sessionData.therapeutic_value,
-          key_insights: sessionData.insights_gained,
-          agent_analysis: {
-            session_duration: sessionData.duration_minutes,
-            goals_worked_on: sessionData.goals_worked_on,
-            crisis_detected: sessionData.crisis_detected
-          },
-          therapeutic_techniques_used: [],
-          tokens_used: 0,
-          cost_usd: 0,
-          session_id: sessionId,
-          conversation_turn: 0,
-          created_at: new Date().toISOString()
-        });
-
-      if (sessionError) throw sessionError;
-
-      // Update user progress metrics
       const user = await this.getUserById(userId);
       if (!user) throw new Error('User not found');
 
-      const currentMetrics = user.progress_metrics;
-      const newTotalSessions = currentMetrics.total_sessions + 1;
-      const newTotalMessages = currentMetrics.total_messages + sessionData.message_count;
-
-      // Calculate new averages
-      const newAvgSessionLength = (
-        (currentMetrics.average_session_length * currentMetrics.total_sessions) + 
-        sessionData.duration_minutes
-      ) / newTotalSessions;
-
-      // Update engagement score based on session quality
+      // Track engagement changes
       const engagementDelta = this.calculateEngagementDelta(sessionData);
-      const newEngagementScore = Math.max(1, Math.min(10, 
-        currentMetrics.engagement_score + engagementDelta
-      ));
-
-      // Update therapeutic progress
       const progressDelta = this.calculateProgressDelta(sessionData);
-      const newTherapeuticProgress = Math.max(1, Math.min(10,
-        currentMetrics.therapeutic_progress + progressDelta
-      ));
 
-      const updatedMetrics: Partial<ProgressMetrics> = {
-        total_sessions: newTotalSessions,
-        total_messages: newTotalMessages,
-        average_session_length: newAvgSessionLength,
-        engagement_score: newEngagementScore,
-        therapeutic_progress: newTherapeuticProgress,
-        insights_gained: currentMetrics.insights_gained + sessionData.insights_gained.length,
-        skills_learned: [
-          ...currentMetrics.skills_learned,
-          ...sessionData.insights_gained.filter(insight => 
-            insight.toLowerCase().includes('skill') || 
-            insight.toLowerCase().includes('technique')
-          )
-        ]
-      };
+      // Update progress metrics
+      await this.updateProgressMetrics(userId, {
+        total_sessions: user.progress_metrics.total_sessions + 1,
+        total_messages: user.progress_metrics.total_messages + sessionData.message_count,
+        average_session_length: (
+          (user.progress_metrics.average_session_length * user.progress_metrics.total_sessions + sessionData.duration_minutes) /
+          (user.progress_metrics.total_sessions + 1)
+        ),
+        engagement_score: Math.max(1, Math.min(10, user.progress_metrics.engagement_score + engagementDelta)),
+        therapeutic_progress: Math.max(1, Math.min(10, user.progress_metrics.therapeutic_progress + progressDelta)),
+        insights_gained: user.progress_metrics.insights_gained + sessionData.insights_gained.length
+      });
 
+      // Handle crisis detection
       if (sessionData.crisis_detected) {
-        updatedMetrics.crisis_incidents = currentMetrics.crisis_incidents + 1;
-        updatedMetrics.last_crisis_date = new Date().toISOString();
+        const supabase = getSafeSupabaseAdminClient();
+        if (supabase) {
+          await supabase
+            .from('crisis_events')
+            .insert({
+              user_id: userId,
+              severity_level: 5, // Default severity
+              crisis_type: 'detected_in_session',
+              context_summary: `Crisis detected during session. Emotional tone: ${sessionData.emotional_tone}`,
+              response_given: 'Automated crisis response triggered',
+              resources_provided: [],
+              human_notified: false,
+              follow_up_required: true,
+              resolved: false,
+              created_at: new Date().toISOString()
+            });
+        }
+
+        // Update crisis incidents count
+        await this.updateProgressMetrics(userId, {
+          crisis_incidents: user.progress_metrics.crisis_incidents + 1,
+          last_crisis_date: new Date().toISOString()
+        });
       }
 
-      await this.updateProgressMetrics(userId, updatedMetrics);
+      // Update psychological profile based on session
+      const profileUpdates: Partial<PsychologicalProfile> = {};
+      
+      if (sessionData.emotional_tone) {
+        profileUpdates.emotional_state = sessionData.emotional_tone;
+      }
+      
+      if (sessionData.therapeutic_value >= 7) {
+        profileUpdates.openness_level = Math.min(10, user.psychological_profile.openness_level + 0.1);
+      }
+
+      if (Object.keys(profileUpdates).length > 0) {
+        await this.updatePsychologicalProfile(userId, profileUpdates);
+      }
 
     } catch (error) {
       console.error('Error tracking session:', error);
@@ -309,42 +310,43 @@ export class UserManager {
     }
   }
 
-  async generateProgressReport(userId: string): Promise<any> {
+  async generateProgressReport(userId: string): Promise<{
+    user: UserProfile;
+    summary: string;
+    trends: {
+      mood: any;
+      engagement: any;
+      progress: any;
+    };
+    insights: string[];
+    recommendations: string[];
+    achievements: string[];
+    growth_areas: string[];
+    next_milestones: string[];
+  }> {
     try {
       const user = await this.getUserById(userId);
       if (!user) throw new Error('User not found');
 
       // Get recent sessions for trend analysis
-      const recentSessions = await this.getRecentSessions(userId, 30); // Last 30 days
-      
-      // Calculate trends
-      const moodTrend = this.calculateMoodTrend(recentSessions);
-      const engagementTrend = this.calculateEngagementTrend(recentSessions);
-      const progressTrend = this.calculateProgressTrend(recentSessions);
+      const recentSessions = await this.getRecentSessions(userId, 30);
 
-      // Generate insights
-      const insights = this.generateProgressInsights(user, recentSessions);
-
-      // Create recommendations
-      const recommendations = this.generateRecommendations(user, recentSessions);
-
-      return {
-        user_id: userId,
-        report_date: new Date().toISOString(),
-        time_period: '30_days',
-        current_metrics: user.progress_metrics,
-        psychological_profile: user.psychological_profile,
+      const report = {
+        user,
+        summary: `Progress report for ${user.first_name}: ${user.progress_metrics.total_sessions} sessions completed with ${user.progress_metrics.insights_gained} insights gained.`,
         trends: {
-          mood: moodTrend,
-          engagement: engagementTrend,
-          progress: progressTrend
+          mood: this.calculateMoodTrend(recentSessions),
+          engagement: this.calculateEngagementTrend(recentSessions),
+          progress: this.calculateProgressTrend(recentSessions)
         },
-        insights,
-        recommendations,
+        insights: this.generateProgressInsights(user, recentSessions),
+        recommendations: this.generateRecommendations(user, recentSessions),
         achievements: this.identifyAchievements(user, recentSessions),
-        areas_for_growth: this.identifyGrowthAreas(user, recentSessions),
+        growth_areas: this.identifyGrowthAreas(user, recentSessions),
         next_milestones: this.suggestNextMilestones(user)
       };
+
+      return report;
 
     } catch (error) {
       console.error('Error generating progress report:', error);
@@ -372,39 +374,13 @@ export class UserManager {
     };
   }
 
-  private createDefaultPsychologicalProfileData() {
-    return {
-      core_beliefs: {},
-      limiting_beliefs: [],
-      empowering_beliefs: [],
-      resistance_patterns: {},
-      communication_style: { style: 'balanced' },
-      emotional_state: 'neutral',
-      stress_level: 5,
-      openness_level: 5,
-      readiness_for_change: 5,
-      energy_level: 5,
-      identity_evolution: [],
-      behavioral_changes: [],
-      goal_progression: {},
-      breakthrough_moments: [],
-      values_clarity: {},
-      technique_effectiveness: {},
-      successful_interventions: [],
-      resistance_triggers: [],
-      preferred_approaches: [],
-      crisis_risk_level: 1,
-      support_system_strength: 5
-    };
-  }
-
   private createDefaultProgressMetrics(): ProgressMetrics {
     return {
       total_sessions: 0,
       total_messages: 0,
       average_session_length: 0,
       engagement_score: 5,
-      therapeutic_progress: 1,
+      therapeutic_progress: 5,
       goal_completion_rate: 0,
       mood_improvement: 0,
       crisis_incidents: 0,
@@ -422,7 +398,7 @@ export class UserManager {
       therapeutic_style: 'mixed',
       privacy_level: 'moderate',
       crisis_contact_preferences: {
-        preferred_crisis_resources: ['988', 'crisis_text_line'],
+        preferred_crisis_resources: [],
         location_sharing: false
       },
       notification_preferences: {
@@ -435,6 +411,11 @@ export class UserManager {
 
   private async getUserById(userId: string): Promise<UserProfile | null> {
     try {
+      const supabase = getSafeSupabaseAdminClient();
+      if (!supabase) {
+        throw new Error('Unable to get Supabase client');
+      }
+
       const { data, error } = await supabase
         .from('users')
         .select(`
@@ -449,7 +430,7 @@ export class UserManager {
         throw error;
       }
 
-      const progressMetrics = await this.calculateProgressMetrics(userId);
+      const progressMetrics = await this.calculateProgressMetrics(data.id);
 
       return {
         ...data,
@@ -458,8 +439,7 @@ export class UserManager {
           ? this.mapDbProfileToUserProfile(data.user_psychological_profiles[0])
           : this.createDefaultPsychologicalProfile(),
         progress_metrics: progressMetrics,
-        preferences: this.createDefaultPreferences(),
-        last_active: data.updated_at
+        preferences: this.createDefaultPreferences()
       };
     } catch (error) {
       console.error('Error getting user by ID:', error);
@@ -467,147 +447,162 @@ export class UserManager {
     }
   }
 
-  private async updateLastActive(userId: string): Promise<UserProfile> {
-    const { data, error } = await supabase
-      .from('users')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', userId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    
-    const user = await this.getUserById(userId);
-    if (!user) throw new Error('User not found after update');
-    
-    return user;
-  }
-
-  private calculateEngagementDelta(sessionData: any): number {
+  private calculateEngagementDelta(sessionData: SessionData): number {
     let delta = 0;
     
-    // Positive factors
-    if (sessionData.therapeutic_value >= 7) delta += 0.1;
-    if (sessionData.duration_minutes >= 10) delta += 0.1;
-    if (sessionData.insights_gained.length > 0) delta += 0.1;
+    // High therapeutic value increases engagement
+    if (sessionData.therapeutic_value >= 8) delta += 0.5;
+    else if (sessionData.therapeutic_value >= 6) delta += 0.2;
+    else if (sessionData.therapeutic_value <= 3) delta -= 0.3;
     
-    // Negative factors
-    if (sessionData.therapeutic_value < 4) delta -= 0.1;
-    if (sessionData.duration_minutes < 3) delta -= 0.1;
+    // Long sessions indicate engagement
+    if (sessionData.duration_minutes >= 30) delta += 0.3;
+    else if (sessionData.duration_minutes <= 5) delta -= 0.2;
+    
+    // High message count indicates engagement
+    if (sessionData.message_count >= 20) delta += 0.2;
     
     return delta;
   }
 
-  private calculateProgressDelta(sessionData: any): number {
+  private calculateProgressDelta(sessionData: SessionData): number {
     let delta = 0;
     
-    // Progress indicators
-    if (sessionData.insights_gained.length >= 2) delta += 0.1;
-    if (sessionData.goals_worked_on.length > 0) delta += 0.05;
-    if (sessionData.therapeutic_value >= 8) delta += 0.1;
+    // Insights gained indicate progress
+    delta += sessionData.insights_gained.length * 0.1;
     
-    // Crisis impact
-    if (sessionData.crisis_detected) delta -= 0.05;
+    // Goals worked on indicate progress
+    delta += sessionData.goals_worked_on.length * 0.15;
+    
+    // High therapeutic value indicates progress
+    if (sessionData.therapeutic_value >= 8) delta += 0.3;
+    else if (sessionData.therapeutic_value >= 6) delta += 0.1;
     
     return delta;
   }
 
-  private async getRecentSessions(userId: string, days: number): Promise<any[]> {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
+  private async getRecentSessions(userId: string, days: number): Promise<DbConversation[]> {
+    try {
+      const supabase = getSafeSupabaseAdminClient();
+      if (!supabase) return [];
 
-    const { data, error } = await supabase
-      .from('conversations')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('created_at', startDate.toISOString())
-      .order('created_at', { ascending: true });
+      const fromDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('created_at', fromDate)
+        .order('created_at', { ascending: false });
 
-    if (error) throw error;
-    return data || [];
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error getting recent sessions:', error);
+      return [];
+    }
   }
 
-  private calculateMoodTrend(sessions: any[]): any {
-    if (sessions.length === 0) return { trend: 'stable', change: 0 };
+  private calculateMoodTrend(sessions: DbConversation[]): {
+    direction: 'improving' | 'declining' | 'stable';
+    confidence: number;
+    recent_average: number;
+  } {
+    if (sessions.length < 3) {
+      return { direction: 'stable', confidence: 0, recent_average: 5 };
+    }
 
-    const moodScores = sessions.map(s => this.emotionalToneToScore(s.emotional_tone));
-    const firstHalf = moodScores.slice(0, Math.floor(moodScores.length / 2));
-    const secondHalf = moodScores.slice(Math.floor(moodScores.length / 2));
-
-    const firstAvg = firstHalf.reduce((sum, score) => sum + score, 0) / firstHalf.length;
-    const secondAvg = secondHalf.reduce((sum, score) => sum + score, 0) / secondHalf.length;
-
-    const change = secondAvg - firstAvg;
+    const moodScores = sessions.map((s: DbConversation) => this.emotionalToneToScore(s.emotional_tone || 'neutral'));
+    const recentAvg = moodScores.slice(0, Math.floor(sessions.length / 2)).reduce((a: number, b: number) => a + b, 0) / Math.floor(sessions.length / 2);
+    const olderAvg = moodScores.slice(Math.floor(sessions.length / 2)).reduce((a: number, b: number) => a + b, 0) / (sessions.length - Math.floor(sessions.length / 2));
+    
+    const difference = recentAvg - olderAvg;
+    const confidence = Math.min(1, sessions.length / 20);
     
     return {
-      trend: change > 0.5 ? 'improving' : change < -0.5 ? 'declining' : 'stable',
-      change: change,
-      current_level: secondAvg
+      direction: Math.abs(difference) < 0.5 ? 'stable' : difference > 0 ? 'improving' : 'declining',
+      confidence,
+      recent_average: recentAvg
     };
   }
 
-  private calculateEngagementTrend(sessions: any[]): any {
-    if (sessions.length === 0) return { trend: 'stable', change: 0 };
+  private calculateEngagementTrend(sessions: DbConversation[]): {
+    direction: 'improving' | 'declining' | 'stable';
+    confidence: number;
+    recent_average: number;
+  } {
+    if (sessions.length < 3) {
+      return { direction: 'stable', confidence: 0, recent_average: 5 };
+    }
 
-    const engagementScores = sessions.map(s => s.therapeutic_value || 5);
-    const recentAvg = engagementScores.slice(-7).reduce((sum, score) => sum + score, 0) / Math.min(7, engagementScores.length);
-    const previousAvg = engagementScores.slice(0, -7).reduce((sum, score) => sum + score, 0) / Math.max(1, engagementScores.length - 7);
-
-    const change = recentAvg - previousAvg;
-
+    const engagementScores = sessions.map((s: DbConversation) => s.therapeutic_value || 5);
+    const recentAvg = engagementScores.slice(0, Math.floor(sessions.length / 2)).reduce((a: number, b: number) => a + b, 0) / Math.floor(sessions.length / 2);
+    const olderAvg = engagementScores.slice(Math.floor(sessions.length / 2)).reduce((a: number, b: number) => a + b, 0) / (sessions.length - Math.floor(sessions.length / 2));
+    
+    const difference = recentAvg - olderAvg;
+    const confidence = Math.min(1, sessions.length / 20);
+    
     return {
-      trend: change > 0.5 ? 'improving' : change < -0.5 ? 'declining' : 'stable',
-      change: change,
-      current_level: recentAvg
+      direction: Math.abs(difference) < 0.5 ? 'stable' : difference > 0 ? 'improving' : 'declining',
+      confidence,
+      recent_average: recentAvg
     };
   }
 
-  private calculateProgressTrend(sessions: any[]): any {
-    const recentInsights = sessions.slice(-7).reduce((sum, s) => sum + (s.key_insights?.length || 0), 0);
-    const previousInsights = sessions.slice(0, -7).reduce((sum, s) => sum + (s.key_insights?.length || 0), 0);
+  private calculateProgressTrend(sessions: DbConversation[]): {
+    direction: 'improving' | 'declining' | 'stable';
+    confidence: number;
+    insights_per_session: number;
+  } {
+    if (sessions.length < 3) {
+      return { direction: 'stable', confidence: 0, insights_per_session: 0 };
+    }
 
-    const recentGoals = sessions.slice(-7).reduce((sum, s) => sum + (s.agent_analysis?.goals_worked_on?.length || 0), 0);
-    const previousGoals = sessions.slice(0, -7).reduce((sum, s) => sum + (s.agent_analysis?.goals_worked_on?.length || 0), 0);
-
-    const insightTrend = recentInsights > previousInsights ? 'increasing' : 
-                        recentInsights < previousInsights ? 'decreasing' : 'stable';
+    const insightsPerSession = sessions.map((s: DbConversation) => (s.key_insights?.length || 0));
+    const avgInsights = insightsPerSession.reduce((a: number, b: number) => a + b, 0) / sessions.length;
     
-    const goalTrend = recentGoals > previousGoals ? 'increasing' : 
-                     recentGoals < previousGoals ? 'decreasing' : 'stable';
-
+    const recentInsights = insightsPerSession.slice(0, Math.floor(sessions.length / 2));
+    const olderInsights = insightsPerSession.slice(Math.floor(sessions.length / 2));
+    
+    const recentAvg = recentInsights.reduce((a: number, b: number) => a + b, 0) / recentInsights.length;
+    const olderAvg = olderInsights.reduce((a: number, b: number) => a + b, 0) / olderInsights.length;
+    
+    const difference = recentAvg - olderAvg;
+    const confidence = Math.min(1, sessions.length / 15);
+    
     return {
-      insights: { trend: insightTrend, recent_count: recentInsights },
-      goals: { trend: goalTrend, recent_count: recentGoals },
-      overall: insightTrend === 'increasing' && goalTrend === 'increasing' ? 'accelerating' :
-               insightTrend === 'decreasing' || goalTrend === 'decreasing' ? 'slowing' : 'steady'
+      direction: Math.abs(difference) < 0.3 ? 'stable' : difference > 0 ? 'improving' : 'declining',
+      confidence,
+      insights_per_session: avgInsights
     };
   }
 
   private emotionalToneToScore(tone: string): number {
-    const toneScores: { [key: string]: number } = {
+    const toneMap: Record<string, number> = {
       'very_positive': 9,
       'positive': 7,
-      'hopeful': 6,
+      'slightly_positive': 6,
       'neutral': 5,
-      'concerned': 4,
-      'sad': 3,
+      'slightly_negative': 4,
+      'negative': 3,
+      'very_negative': 1,
       'anxious': 2,
-      'distressed': 1
+      'depressed': 2,
+      'excited': 8,
+      'calm': 7,
+      'frustrated': 3,
+      'hopeful': 8
     };
-    return toneScores[tone] || 5;
+    
+    return toneMap[tone.toLowerCase()] || 5;
   }
 
-  private generateProgressInsights(user: UserProfile, sessions: any[]): string[] {
-    const insights = [];
+  private generateProgressInsights(user: UserProfile, sessions: DbConversation[]): string[] {
+    const insights: string[] = [];
     
     // Session frequency insights
     if (sessions.length >= 20) {
-      insights.push("You've been consistently engaging with therapy, which shows strong commitment to your growth.");
-    }
-    
-    // Progress insights
-    if (user.progress_metrics.therapeutic_progress >= 7) {
-      insights.push("You've made significant therapeutic progress and developed valuable coping skills.");
+      insights.push("You've maintained consistent engagement with regular sessions.");
     }
     
     // Engagement insights
@@ -623,8 +618,8 @@ export class UserManager {
     return insights;
   }
 
-  private generateRecommendations(user: UserProfile, sessions: any[]): string[] {
-    const recommendations = [];
+  private generateRecommendations(user: UserProfile, sessions: DbConversation[]): string[] {
+    const recommendations: string[] = [];
     
     // Based on engagement
     if (user.progress_metrics.engagement_score < 6) {
@@ -644,8 +639,8 @@ export class UserManager {
     return recommendations;
   }
 
-  private identifyAchievements(user: UserProfile, sessions: any[]): string[] {
-    const achievements = [];
+  private identifyAchievements(user: UserProfile, sessions: DbConversation[]): string[] {
+    const achievements: string[] = [];
     
     if (user.progress_metrics.total_sessions >= 10) {
       achievements.push("Completed 10+ therapy sessions");
@@ -662,8 +657,8 @@ export class UserManager {
     return achievements;
   }
 
-  private identifyGrowthAreas(user: UserProfile, sessions: any[]): string[] {
-    const growthAreas = [];
+  private identifyGrowthAreas(user: UserProfile, sessions: DbConversation[]): string[] {
+    const growthAreas: string[] = [];
     
     if (user.psychological_profile.resilience_score < 6) {
       growthAreas.push("Building emotional resilience");
@@ -681,7 +676,7 @@ export class UserManager {
   }
 
   private suggestNextMilestones(user: UserProfile): string[] {
-    const milestones = [];
+    const milestones: string[] = [];
     
     if (user.progress_metrics.total_sessions < 20) {
       milestones.push("Complete 20 therapy sessions");
@@ -700,6 +695,11 @@ export class UserManager {
 
   private async calculateProgressMetrics(userId: string): Promise<ProgressMetrics> {
     try {
+      const supabase = getSafeSupabaseAdminClient();
+      if (!supabase) {
+        return this.createDefaultProgressMetrics();
+      }
+
       // Get basic conversation stats
       const { data: conversations, error: convError } = await supabase
         .from('conversations')
@@ -709,20 +709,20 @@ export class UserManager {
       if (convError) throw convError;
 
       const totalMessages = conversations?.length || 0;
-      const sessions = conversations?.filter(c => c.session_id) || [];
-      const uniqueSessions = new Set(sessions.map(s => s.session_id)).size;
+      const sessions = conversations?.filter((c: DbConversation) => c.session_id) || [];
+      const uniqueSessions = new Set(sessions.map((s: DbConversation) => s.session_id)).size;
 
       // Calculate average session length (approximate)
       const avgSessionLength = sessions.length > 0 ? 
-        sessions.reduce((sum, s) => sum + (s.response_time_ms || 0), 0) / sessions.length / 60000 : 0;
+        sessions.reduce((sum: number, s: DbConversation) => sum + (s.response_time_ms || 0), 0) / sessions.length / 60000 : 0;
 
       // Calculate engagement score from therapeutic values
-      const therapeuticValues = conversations?.map(c => c.therapeutic_value).filter(v => v > 0) || [];
+      const therapeuticValues = conversations?.map((c: DbConversation) => c.therapeutic_value).filter((v: number) => v > 0) || [];
       const avgTherapeuticValue = therapeuticValues.length > 0 ?
-        therapeuticValues.reduce((sum, v) => sum + v, 0) / therapeuticValues.length : 5;
+        therapeuticValues.reduce((sum: number, v: number) => sum + v, 0) / therapeuticValues.length : 5;
 
       // Count insights
-      const totalInsights = conversations?.reduce((sum, c) => sum + (c.key_insights?.length || 0), 0) || 0;
+      const totalInsights = conversations?.reduce((sum: number, c: DbConversation) => sum + (c.key_insights?.length || 0), 0) || 0;
 
       // Count crisis incidents
       const { data: crisisEvents, error: crisisError } = await supabase
@@ -758,6 +758,9 @@ export class UserManager {
 
   private async saveProgressMetric(userId: string, metricName: string, value: number): Promise<void> {
     try {
+      const supabase = getSafeSupabaseAdminClient();
+      if (!supabase) return;
+
       await supabase
         .from('progress_metrics')
         .insert({
@@ -775,7 +778,7 @@ export class UserManager {
     }
   }
 
-  private mapDbProfileToUserProfile(dbProfile: any): PsychologicalProfile {
+  private mapDbProfileToUserProfile(dbProfile: DbPsychProfile): PsychologicalProfile {
     return {
       emotional_state: dbProfile.emotional_state || 'neutral',
       stress_level: dbProfile.stress_level || 5,
@@ -795,7 +798,7 @@ export class UserManager {
     };
   }
 
-  private mapUserProfileToDbProfile(userProfile: Partial<PsychologicalProfile>): any {
+  private mapUserProfileToDbProfile(userProfile: Partial<PsychologicalProfile>): Partial<Database['public']['Tables']['user_psychological_profiles']['Update']> {
     return {
       emotional_state: userProfile.emotional_state,
       stress_level: userProfile.stress_level,

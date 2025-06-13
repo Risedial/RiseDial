@@ -5,7 +5,7 @@
  * Checks environment variables and configuration before deployment
  */
 
-import { createClient } from '@supabase/supabase-js';
+const { createClient } = require('@supabase/supabase-js');
 
 interface ValidationResult {
   passed: boolean;
@@ -235,6 +235,4 @@ if (require.main === module) {
     console.error('Validation script failed:', error);
     process.exit(1);
   });
-}
-
-export { DeploymentValidator }; 
+} 

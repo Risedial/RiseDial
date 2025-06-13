@@ -25,8 +25,19 @@
       "@/utils/*": ["./src/utils/*"],
       "@/api/*": ["./src/api/*"]
     },
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
   },
-  "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "tests/**/*", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"]
+  "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx", ".next/types/**/*.ts", "scripts/**/*.ts"],
+  "exclude": [
+    "node_modules", 
+    "tests/**/*", 
+    "**/tests/**/*",
+    "**/*.test.ts", 
+    "**/*.test.tsx", 
+    "**/*.spec.ts", 
+    "**/*.spec.tsx",
+    "jest.config.js",
+    "test-orchestrator.js"
+  ]
 } 
