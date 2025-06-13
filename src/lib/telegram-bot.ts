@@ -70,7 +70,4 @@ export class TelegramBot {
   }
 }
 
-// Export the user type for backwards compatibility
-export { TelegramUser as TelegramUser };
-
 export default TelegramBot; 

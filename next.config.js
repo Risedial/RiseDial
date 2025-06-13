@@ -1,7 +1,19 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Move serverComponentsExternalPackages to top-level for Next.js 15
-  serverExternalPackages: ['@supabase/supabase-js'],
+  // Experimental features for Next.js 15
+  experimental: {
+    turbo: {
+      rules: {
+        '*.svg': {
+          loaders: ['@svgr/webpack'],
+          as: '*.js',
+        },
+      },
+    },
+  },
+  
+  // External packages that should not be bundled
+  serverExternalPackages: ['@supabase/supabase-js', 'grammy', 'openai'],
   
   // Environment variables configuration
   env: {
@@ -11,8 +23,7 @@ const nextConfig = {
   
   // Build configuration
   generateBuildId: async () => {
-    // Use a consistent build ID to avoid unnecessary rebuilds
-    return 'build-' + Date.now()
+    return 'build-' + new Date().toISOString().replace(/[:.]/g, '-')
   },
   
   // API routes configuration
@@ -21,11 +32,15 @@ const nextConfig = {
       {
         source: '/health',
         destination: '/api/health'
+      },
+      {
+        source: '/metrics',
+        destination: '/api/metrics'
       }
     ]
   },
   
-  // Headers configuration
+  // Headers configuration for security and CORS
   async headers() {
     return [
       {
@@ -33,7 +48,9 @@ const nextConfig = {
         headers: [
           {
             key: 'Access-Control-Allow-Origin',
-            value: '*'
+            value: process.env.NODE_ENV === 'production' 
+              ? process.env.ALLOWED_ORIGINS || 'https://your-domain.vercel.app'
+              : '*'
           },
           {
             key: 'Access-Control-Allow-Methods',
@@ -41,7 +58,32 @@ const nextConfig = {
           },
           {
             key: 'Access-Control-Allow-Headers',
-            value: 'Content-Type, Authorization'
+            value: 'Content-Type, Authorization, X-Requested-With'
+          },
+          {
+            key: 'Cache-Control',
+            value: 'no-store, must-revalidate'
+          }
+        ]
+      },
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff'
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY'
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block'
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin'
           }
         ]
       }
@@ -50,6 +92,23 @@ const nextConfig = {
   
   // Webpack configuration
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
+    // Optimize for production
+    if (!dev) {
+      config.optimization = {
+        ...config.optimization,
+        splitChunks: {
+          chunks: 'all',
+          cacheGroups: {
+            vendor: {
+              test: /[\\/]node_modules[\\/]/,
+              name: 'vendors',
+              chunks: 'all',
+            },
+          },
+        },
+      }
+    }
+    
     // Ignore build-time environment checks in client bundle
     if (!isServer) {
       config.resolve.fallback = {
@@ -57,43 +116,64 @@ const nextConfig = {
         fs: false,
         net: false,
         tls: false,
+        crypto: false,
+        path: false,
+        os: false,
+        stream: false,
+        assert: false,
       }
     }
     
     return config
   },
   
-  // Compress output
+  // Output configuration
+  output: 'standalone',
+  
+  // Compression
   compress: true,
   
-  // Power by header
+  // Remove powered by header
   poweredByHeader: false,
   
   // React strict mode
   reactStrictMode: true,
   
-  // Image domains if needed
+  // Images configuration
   images: {
+    formats: ['image/webp', 'image/avif'],
     domains: ['localhost'],
     remotePatterns: [
       {
         protocol: 'https',
         hostname: '**.supabase.co',
       }
-    ]
+    ],
+    minimumCacheTTL: 60,
   },
   
   // TypeScript configuration
   typescript: {
-    // Don't fail build on TypeScript errors in development
-    ignoreBuildErrors: process.env.NODE_ENV === 'development'
+    ignoreBuildErrors: false,
   },
   
   // ESLint configuration
   eslint: {
-    // Don't fail build on ESLint errors in development
-    ignoreDuringBuilds: process.env.NODE_ENV === 'development'
-  }
+    ignoreDuringBuilds: false,
+  },
+  
+  // Logging configuration
+  logging: {
+    fetches: {
+      fullUrl: process.env.NODE_ENV === 'development',
+    },
+  },
+  
+  // Performance monitoring
+  onDemandEntries: {
+    maxInactiveAge: 25 * 1000,
+    pagesBufferLength: 2,
+  },
 }
 
 module.exports = nextConfig 

@@ -24,9 +24,12 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
+    "@types/node": "^22.7.5",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.21",
-    "next": "^15.2.2",
     "grammy": "^1.28.0",
+    "next": "^15.3.3",
     "openai": "^4.104.0",
     "postcss": "^8.5.5",
     "react": "^18.3.1",
@@ -37,11 +40,8 @@
   "devDependencies": {
     "@testing-library/jest-dom": "^6.5.0",
     "@types/jest": "^29.5.13",
-    "@types/node": "^22.7.5",
-    "@types/react": "^18.3.11",
-    "@types/react-dom": "^18.3.0",
     "eslint": "^8.57.1",
-    "eslint-config-next": "^15.2.2",
+    "eslint-config-next": "^15.3.3",
     "jest": "^29.7.0",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2"
