@@ -3,10 +3,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "installCommand": "npm ci",
-  "functions": {
-    "src/api/telegram-webhook.js": { "maxDuration": 30 },
-    "src/api/ai-chat.js": { "maxDuration": 60 }
-  },
   "headers": [
     {
       "source": "/api/(.*)",
