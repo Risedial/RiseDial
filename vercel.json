@@ -44,13 +44,15 @@
   ],
   "env": {
     "NODE_ENV": "production",
-    "NEXT_TELEMETRY_DISABLED": "1"
+    "NEXT_TELEMETRY_DISABLED": "1",
+    "SKIP_ESLINT": "true"
   },
   "build": {
     "env": {
       "NODE_ENV": "production",
       "NEXT_TELEMETRY_DISABLED": "1",
-      "SKIP_BUILD_STATIC_GENERATION": "false"
+      "SKIP_BUILD_STATIC_GENERATION": "false",
+      "SKIP_ESLINT": "true"
     }
   },
   "crons": [

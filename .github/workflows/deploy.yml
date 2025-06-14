@@ -124,6 +124,9 @@ jobs:
       - name: Validate critical dependencies
         run: npm run validate-deps
       
+      - name: Run ESLint validation
+        run: npm run lint:check
+      
       - name: Test build
         run: npm run build
 
