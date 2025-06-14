@@ -26,8 +26,8 @@ const requiredEnvVars = [
  * Safely get environment variable with optional fallback
  */
 function getEnvVar(key: string, fallback?: string): string {
-  // During build time, return fallback or empty string
-  if (typeof window === 'undefined' && process.env.NODE_ENV === 'development' && !process.env[key]) {
+  // During build time or test time, return fallback or empty string
+  if (typeof window === 'undefined' && (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && !process.env[key]) {
     return fallback || '';
   }
   
@@ -43,6 +43,11 @@ function getEnvVar(key: string, fallback?: string): string {
  * Validate required environment variables at runtime
  */
 export function validateEnvironment(): void {
+  // Skip validation during test environment
+  if (process.env.NODE_ENV === 'test') {
+    return;
+  }
+  
   const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
   const missing = required.filter(key => !process.env[key]);
   
@@ -55,20 +60,21 @@ export function validateEnvironment(): void {
  * Get environment configuration with runtime validation
  */
 export function getEnvironmentConfig(): EnvironmentConfig {
-  // Skip validation during build time
+  // Skip validation during build time or test time
   const isBuildTime = process.env.NODE_ENV === 'development' && !process.env.SUPABASE_URL;
+  const isTestTime = process.env.NODE_ENV === 'test';
   
-  if (!isBuildTime) {
+  if (!isBuildTime && !isTestTime) {
     validateEnvironment();
   }
   
   return {
     NODE_ENV: process.env.NODE_ENV || 'development',
-    SUPABASE_URL: getEnvVar('SUPABASE_URL', isBuildTime ? 'https://placeholder.supabase.co' : undefined),
-    SUPABASE_ANON_KEY: getEnvVar('SUPABASE_ANON_KEY', isBuildTime ? 'placeholder-key' : undefined),
+    SUPABASE_URL: getEnvVar('SUPABASE_URL', (isBuildTime || isTestTime) ? 'https://placeholder.supabase.co' : undefined),
+    SUPABASE_ANON_KEY: getEnvVar('SUPABASE_ANON_KEY', (isBuildTime || isTestTime) ? 'placeholder-key' : undefined),
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
-    TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || ((isBuildTime || isTestTime) ? 'sk-placeholder' : ''),
+    TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || ((isBuildTime || isTestTime) ? '123456:placeholder' : ''),
     TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET,
     NEXT_TELEMETRY_DISABLED: process.env.NEXT_TELEMETRY_DISABLED,
     VERCEL_URL: process.env.VERCEL_URL

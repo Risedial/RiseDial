@@ -33,7 +33,7 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_WEBHOOK_SECRET=your_webhook_secret
 
 # Notifications
-SLACK_WEBHOOK=your_slack_webhook_url
+SLACK_WEBHOOK=https://hooks.slack.com/services/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
 
 # Authentication (Production)
 NEXTAUTH_SECRET=your_nextauth_secret

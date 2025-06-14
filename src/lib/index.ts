@@ -1,5 +1,5 @@
 // Core library exports - to be implemented
-export { DatabaseUtils as db } from './database';
+export { DatabaseUtils as db, getDatabaseUtils, createDatabaseUtils } from './database';
 export { config } from './config';
 
 // Export AI orchestrator and agents

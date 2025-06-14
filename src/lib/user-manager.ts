@@ -1,4 +1,4 @@
-import { getDatabaseUtils } from './database';
+import { DatabaseUtils } from './database';
 import { getSafeSupabaseAdminClient } from './supabase-client';
 import { 
   Database, 
@@ -86,7 +86,11 @@ interface SessionData {
 }
 
 export class UserManager {
-  private db = getDatabaseUtils();
+  private db: DatabaseUtils;
+
+  constructor() {
+    this.db = new DatabaseUtils();
+  }
 
   async createOrUpdateUser(telegramUser: TelegramUser): Promise<UserProfile> {
     try {
