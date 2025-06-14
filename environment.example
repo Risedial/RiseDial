@@ -1,0 +1,52 @@
+# Risedial Environment Configuration
+# Copy this file to .env and fill in your actual values
+
+# ===========================================
+# DATABASE CONFIGURATION
+# ===========================================
+DATABASE_URL=postgresql://username:password@localhost:5432/risedial
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+# ===========================================
+# AI SERVICE CONFIGURATION
+# ===========================================
+OPENAI_API_KEY=sk-your_openai_api_key
+
+# ===========================================
+# TELEGRAM CONFIGURATION
+# ===========================================
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_WEBHOOK_SECRET=your_webhook_secret_key
+
+# ===========================================
+# AUTHENTICATION
+# ===========================================
+NEXTAUTH_SECRET=your_nextauth_secret_key
+NEXTAUTH_URL=https://api.risedial.com
+
+# ===========================================
+# DEPLOYMENT CONFIGURATION
+# ===========================================
+VERCEL_TOKEN=your_vercel_token
+VERCEL_ORG_ID=your_vercel_org_id
+VERCEL_PROJECT_ID=your_vercel_project_id
+
+# ===========================================
+# MONITORING & NOTIFICATIONS
+# ===========================================
+SLACK_WEBHOOK=https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK
+
+# ===========================================
+# ENVIRONMENT-SPECIFIC SETTINGS
+# ===========================================
+NODE_ENV=development
+VERCEL_ENV=development
+
+# ===========================================
+# OPTIONAL CONFIGURATIONS
+# ===========================================
+# LOG_LEVEL=info
+# RATE_LIMIT_MAX=100
+# RATE_LIMIT_WINDOW=900000 
