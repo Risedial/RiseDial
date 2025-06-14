@@ -1,0 +1,34 @@
+name: Dependency Sync Check
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  check-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Check package.json and package-lock.json sync
+        run: |
+          if ! npm ci --dry-run; then
+            echo "❌ package.json and package-lock.json are out of sync"
+            echo "Please run 'npm install' locally and commit the updated package-lock.json"
+            exit 1
+          fi
+          echo "✅ Dependencies are properly synchronized"
+      
+      - name: Validate axios installation
+        run: |
+          npm ci
+          if ! npm ls axios; then
+            echo "❌ axios is not properly installed"
+            exit 1
+          fi
+          echo "✅ axios is properly installed" 

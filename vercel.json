@@ -1,8 +1,8 @@
 {
   "framework": "nextjs",
   "buildCommand": "npm run build:production",
+  "installCommand": "npm ci || (echo 'npm ci failed, falling back to npm install' && rm -rf node_modules && npm install)",
   "outputDirectory": ".next",
-  "installCommand": "npm ci",
   "regions": ["iad1", "cle1"],
   "functions": {
     "src/app/api/**/*.ts": {

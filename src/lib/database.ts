@@ -497,8 +497,5 @@ export const db = {
   }
 };
 
-// Export the database utils class for direct instantiation if needed
-export { DatabaseUtils };
-
 // Default export for convenience
 export default getDatabaseUtils; 
